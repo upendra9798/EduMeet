@@ -8,6 +8,7 @@ import { fileURLToPath } from 'url'
 
 import http from "http";
 import { Server } from 'socket.io'
+import whiteboardSocket from './sockets/whiteboardSocket.js'
 
 // Get current directory for ES modules
 const __filename = fileURLToPath(import.meta.url)
@@ -43,6 +44,9 @@ const io = new Server(server, {
 // origin: "http://localhost:5173": Allows connections only from this frontend URL (typical Vite dev server port)
 // methods: ["GET", "POST"]: Specifies which HTTP methods are allowed for CORS requests
 // This ensures that browsers won’t block the WebSocket connection due to CORS issues.
+
+// ✅ Initialize all socket features (whiteboard, chat, etc.)
+whiteboardSocket(io);
 
 // HANDLING MULTIPLE USERS
 const users = {}; // roomId -> array of socket IDs
