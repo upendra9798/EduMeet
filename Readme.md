@@ -7,6 +7,8 @@ It assumes a signaling server (your Node.js backend) is already running and hand
 
 Backend - npm i socket.io
 Frontend -> npm install socket.io-client
+            npm install uuid
+
 
 A simple visual diagram showing how the WebRTC offer–answer–ICE signaling flow works between the Host (meeting creator) and Guest (joining user).
 
