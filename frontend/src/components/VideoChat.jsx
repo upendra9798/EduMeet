@@ -1,137 +1,213 @@
-// frontend/src/components/VideoChat.jsx
 import React, { useEffect, useRef, useState } from "react";
 import { socket } from "../utils/socket";
+import { v4 as uuidv4 } from "uuid";
 
+/**
+ * 🎥 VideoChat Component
+ * Handles joining/creating meeting rooms and connecting users with WebRTC.
+ * Uses Socket.IO for signaling (offer/answer/ICE exchange).
+ */
 export default function VideoChat() {
-  // Room ID for users to join (here fixed to "main-room")
-  const [roomId] = useState("main-room");
+  const [roomId, setRoomId] = useState("");
+  const [joined, setJoined] = useState(false);
+  const localVideoRef = useRef(null);
+  const localStreamRef = useRef(null);
+  const pcRef = useRef({}); // Each user gets its own RTCPeerConnection instance
 
-  // References to local and remote video elements
-  const localVideoRef = useRef();
-  const remoteVideoRef = useRef();
-  //localVideoRef: reference to your local video element (self-view).
-// remoteVideoRef: reference to the remote user’s video stream.
+  /** 🏠 Create unique Room ID */
+  const createRoom = () => {
+    const id = uuidv4().slice(0, 8);
+    setRoomId(id);
+  };
 
-  // Reference to WebRTC PeerConnection
-  const pcRef = useRef();
+  /** 🚪 Join a room (existing or new) */
+  const joinRoom = async () => {
+    if (!roomId.trim()) return alert("Please enter or create a Room ID!");
+    setJoined(true);
 
-//Main WebRTC logic
-  useEffect(() => { //Everything inside useEffect runs once when the component mounts.
-    // Create a new RTCPeerConnection with a public STUN server
-    // STUN helps devices discover their public IP to connect directly
+    // Access camera and microphone
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: true,
+      audio: true,
+    });
+
+    // Attach local video stream
+    localVideoRef.current.srcObject = stream;
+    localStreamRef.current = stream;
+
+    // Notify server
+    socket.emit("join-room", roomId);
+  };
+
+  /** 🔗 WebRTC signaling logic via Socket.IO */
+  useEffect(() => {
+    // Existing users in the room
+    socket.on("all-users", async (userIds) => {
+      for (const id of userIds) await createPeerConnection(id, true);
+    });
+
+    // A new user joins
+    socket.on("user-joined", async (id) => {
+      await createPeerConnection(id, false);
+    });
+
+    // Receive an offer
+    socket.on("offer", async ({ from, sdp }) => {
+      const pc = await createPeerConnection(from, false);
+      await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      socket.emit("answer", { to: from, sdp: answer });
+    });
+
+    // Receive an answer
+    socket.on("answer", async ({ from, sdp }) => {
+      const pc = pcRef.current[from];
+      if (pc) await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+    });
+
+    // Receive ICE candidate
+    socket.on("ice-candidate", async ({ from, candidate }) => {
+      const pc = pcRef.current[from];
+      if (pc && candidate)
+        await pc.addIceCandidate(new RTCIceCandidate(candidate));
+    });
+
+    // When a user leaves
+    socket.on("user-left", (id) => {
+      const video = document.getElementById(id);
+      if (video) video.remove();
+      if (pcRef.current[id]) pcRef.current[id].close();
+      delete pcRef.current[id];
+    });
+
+    return () => {
+      socket.off("all-users");
+      socket.off("user-joined");
+      socket.off("offer");
+      socket.off("answer");
+      socket.off("ice-candidate");
+      socket.off("user-left");
+    };
+  }, []);
+
+  /** 🎛️ Create WebRTC Peer Connection */
+  const createPeerConnection = async (id, isInitiator) => {
     const pc = new RTCPeerConnection({
       iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
     });
-    pcRef.current = pc;
 
-    // Step 1: Join a specific meeting room
-    socket.emit("join-room", roomId);
-    //Tells the signaling server this user wants to join a specific room.
-    // The server will then notify other users in that room.
+    // Send ICE candidates to the other peer
+    pc.onicecandidate = (event) => {
+      if (event.candidate)
+        socket.emit("ice-candidate", { to: id, candidate: event.candidate });
+    };
 
-    // Step 2: Get local camera + microphone stream
-    navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-      .then((stream) => {
-        // Show your own camera stream
-        localVideoRef.current.srcObject = stream;
+    // When remote stream arrives
+    pc.ontrack = (event) => {
+      const video = document.createElement("video");
+      video.id = id;
+      video.srcObject = event.streams[0];
+      video.autoplay = true;
+      video.playsInline = true;
+      video.className =
+        "w-48 md:w-60 border-2 border-blue-400 rounded-xl shadow-md";
+      document.getElementById("video-grid").appendChild(video);
+    };
 
-        // Add each media track to the PeerConnection (so the other peer can receive it)
-        stream.getTracks().forEach((track) => pc.addTrack(track, stream));
-      });
+    // Add local tracks to the connection
+    localStreamRef.current.getTracks().forEach((track) => {
+      pc.addTrack(track, localStreamRef.current);
+    });
 
-    // 6️⃣ Handle New User Joining
-    // Step 3: When another user joins the room
-    socket.on("user-joined", async (id) => {
-      // Create an offer (your connection details)
+    pcRef.current[id] = pc;
+
+    // If user is initiator, create an offer
+    if (isInitiator) {
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
+      socket.emit("offer", { to: id, sdp: offer });
+    }
 
-      // Send the offer SDP to the other user through socket
-      socket.emit("offer", { sdp: offer, to: id });
-    });
+    return pc;
+  };
 
-// 7️⃣ Handle Receiving an Offer
-    // Step 4: When you receive an offer from another user
-    socket.on("offer", async ({ sdp, from }) => {
-      // Set their offer as your remote description
-      await pc.setRemoteDescription(new RTCSessionDescription(sdp));
-
-      // Create an answer (your connection info)
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
-
-      // Send the answer SDP back to the offer sender
-      socket.emit("answer", { sdp: answer, to: from });
-    });
-
-// 8️⃣ Handle Receiving an Answer
-    // Step 5: When you receive the answer to your offer
-    socket.on("answer", async ({ sdp }) => {
-      // Set the remote description so connection can complete
-      await pc.setRemoteDescription(new RTCSessionDescription(sdp));
-    });//Now both peers have exchanged SDP info, and connection setup can complete.
-
-// 9️⃣ ICE Candidates (Network Path Discovery)
-    // Step 6: When you receive an ICE candidate from the other peer
-    socket.on("ice-candidate", async ({ candidate }) => {
-      if (candidate) {
-        // Add their ICE candidate to your connection
-        await pc.addIceCandidate(new RTCIceCandidate(candidate));
-      }
-    });
-    //Each peer discovers possible network paths (ICE candidates).
-    // They send them to each other through Socket.io.
-
-    // Step 7: When your browser finds a new ICE candidate
-    pc.onicecandidate = (event) => {
-      if (event.candidate) {
-        // Send your candidate to the other peer via socket
-        socket.emit("ice-candidate", {
-          to: roomId,
-          candidate: event.candidate,
-        });
-      }
-    };
-
-//🔟 Handling Incoming Media
-    // Step 8: When remote media (video/audio) is received
-    pc.ontrack = (event) => {
-      // Display the other user’s video stream
-      remoteVideoRef.current.srcObject = event.streams[0];
-    };//When the remote peer sends you media, attach it to your remote video element.
-
-    // Cleanup when the component unmounts
-    return () => {
-      socket.disconnect();
-      pc.close();
-    };
-  }, [roomId]);
-
+  /** 🖥️ UI */
   return (
-    <div className="flex flex-col items-center gap-4">
-      <h2 className="text-xl font-semibold">Live Video Meeting</h2>
+    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 text-gray-800 p-4">
+      {!joined ? (
+        // 🔹 Lobby Screen
+        <div className="bg-white p-6 rounded-2xl shadow-lg w-full max-w-md text-center">
+          <h2 className="text-2xl font-bold mb-4 text-gray-700">
+            🎥 Join or Create a Meeting
+          </h2>
 
-      <div className="flex gap-4">
-        {/* Local video (muted to prevent echo) */}
-        <video ref={localVideoRef} autoPlay muted className="w-64 border rounded" />
+          <div className="flex gap-2 mb-3">
+            <input
+              type="text"
+              placeholder="Enter Room ID"
+              value={roomId}
+              onChange={(e) => setRoomId(e.target.value)}
+              className="flex-1 border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-400 outline-none"
+            />
+            <button
+              onClick={createRoom}
+              className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+            >
+              New
+            </button>
+          </div>
 
-        {/* Remote video (from the connected user) */}
-        <video ref={remoteVideoRef} autoPlay className="w-64 border rounded" />
-      </div>
-    {/* //Displays two video elements:
-Local video (muted to prevent echo)
-Remote video (for the other user) */}
+          <button
+            onClick={joinRoom}
+            className="w-full py-2 mt-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition"
+          >
+            Join Room
+          </button>
+        </div>
+      ) : (
+        // 🔹 Meeting Screen
+        <div className="w-full max-w-5xl bg-white p-6 rounded-2xl shadow-lg">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-semibold">
+              Room ID: <span className="text-blue-600">{roomId}</span>
+            </h3>
+            <button
+              onClick={() => window.location.reload()}
+              className="text-red-500 hover:underline"
+            >
+              Leave
+            </button>
+          </div>
+
+          <div
+            id="video-grid"
+            className="flex flex-wrap justify-center gap-4 border-t pt-4"
+          >
+            <video
+              ref={localVideoRef}
+              autoPlay
+              muted
+              playsInline
+              className="w-48 md:w-60 border-2 border-green-400 rounded-xl shadow-md"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-// Step	 Action	                            Who does it
-// 1	User joins room	                    Client → Server
-// 2	Server tells others “user joined”	Server → Clients
-// 3	Offer is created and sent	        Peer A → Peer B
-// 4	Answer is created and sent	        Peer B → Peer A
-// 5	ICE candidates exchanged	        Both ways
-// 6	Streams connected	                WebRTC
+/**
+ * 🧭 WebRTC Connection Flow
+ * 1️⃣ User joins room → Client → Server
+ * 2️⃣ Server notifies others → “user-joined”
+ * 3️⃣ Offer created & sent → Peer A → Peer B
+ * 4️⃣ Answer created & sent → Peer B → Peer A
+ * 5️⃣ ICE candidates exchanged → Both ways
+ * 6️⃣ Media streams connected → Direct P2P WebRTC
+ */
+
 
 /*🎥 WebRTC Connection in a Nutshell
 
@@ -191,8 +267,3 @@ Person who creates the meeting / starts the call	Creates an offer	This user’s 
 Person who joins the meeting / receives the call	Creates an answer	This user’s browser receives the offer, sets it as the remote description, then generates its own connection info and sends it back as an answer.
 */
 
-
-
-
-MAKE IT FOR MULTI USERS AND
- MAKE GIT REPO
