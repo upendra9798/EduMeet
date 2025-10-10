@@ -1,17 +1,48 @@
-// frontend/src/App.jsx
-import React from "react";
-import VideoChat from "./components/VideoChat";
-import Whiteboard from "./components/Whiteboard";
+import React, { useState } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import Dashboard from './pages/Dashboard';
+import MeetingRoom from './pages/MeetingRoom';
+import HomePage from './pages/HomePage';
 
+/**
+ * Main App Component
+ * Handles routing and global state management
+ */
 function App() {
+  // Global state (in a real app, use Context API or Redux)
+  const [user, setUser] = useState({
+    id: 'demo-user-' + Math.random().toString(36).substr(2, 9),
+    username: 'Demo User',
+    email: 'demo@edumeet.com'
+  });
+
   return (
-    <div className="p-4 text-center">
-      <h1 className="text-3xl font-bold mb-6">TeachSync – Real-time Meeting & Whiteboard</h1>
-      <div className="flex flex-col gap-10 items-center">
-        <VideoChat />
-        <Whiteboard />
+    <Router>
+      <div className="min-h-screen bg-gray-50">
+        <Routes>
+          {/* Home/Landing Page */}
+          <Route 
+            path="/" 
+            element={<HomePage user={user} />} 
+          />
+          
+          {/* Dashboard - Meeting Management */}
+          <Route 
+            path="/dashboard" 
+            element={<Dashboard user={user} />} 
+          />
+          
+          {/* Meeting Room */}
+          <Route 
+            path="/meeting/:meetingId" 
+            element={<MeetingRoom user={user} />} 
+          />
+          
+          {/* Redirect unknown routes to home */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
       </div>
-    </div>
+    </Router>
   );
 }
 

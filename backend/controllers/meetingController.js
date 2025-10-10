@@ -1,23 +1,35 @@
+// Import necessary modules
 import Meeting from '../models/meeting.js';
 import { v4 as uuidv4 } from 'uuid';
 
+/**
+ * Create a new meeting
+ * @route POST /api/meetings/create
+ * @desc Creates a new meeting with specified settings and host information
+ * @access Private (requires authentication)
+ */
 export const createMeeting = async (req, res) => {
     try {
+        // Extract meeting details from request body
         const { title, startTime, endTime, maxParticipants, roomType, meetingSettings } = req.body;
-        const hostId = req.user?.id || req.body.hostId; // Assuming auth middleware sets req.user
+        
+        // Get host ID from authenticated user or request body (fallback for testing)
+        const hostId = req.user?.id || req.body.hostId;
 
-        // Generate unique meeting ID
+        // Generate unique meeting ID using UUID v4
         const meetingId = uuidv4();
 
+        // Create new meeting instance with provided or default values
         const meeting = new Meeting({
             meetingId,
             title,
             host: hostId,
-            startTime: startTime || new Date(),
+            startTime: startTime || new Date(), // Use current time if not provided
             endTime,
-            maxParticipants: maxParticipants || 50,
-            roomType: roomType || 'private',
+            maxParticipants: maxParticipants || 50, // Default to 50 participants
+            roomType: roomType || 'private', // Default to private room
             meetingSettings: meetingSettings || {
+                // Default meeting settings - allow all features
                 allowVideo: true,
                 allowAudio: true,
                 allowScreenShare: true,
@@ -26,8 +38,10 @@ export const createMeeting = async (req, res) => {
             }
         });
 
+        // Save meeting to database
         await meeting.save();
 
+        // Return success response with meeting details
         res.status(201).json({
             success: true,
             message: 'Meeting created successfully',
@@ -42,6 +56,7 @@ export const createMeeting = async (req, res) => {
             }
         });
     } catch (error) {
+        // Handle any errors during meeting creation
         console.error('Error creating meeting:', error);
         res.status(500).json({
             success: false,
@@ -51,15 +66,25 @@ export const createMeeting = async (req, res) => {
     }
 };
 
+/**
+ * Join an existing meeting
+ * @route POST /api/meetings/join/:meetingId
+ * @desc Allows a user to join an existing active meeting
+ * @access Private (requires authentication)
+ */
 export const joinMeeting = async (req, res) => {
     try {
+        // Extract meeting ID from URL parameters
         const { meetingId } = req.params;
+        // Get user ID from authenticated user or request body (fallback for testing)
         const userId = req.user?.id || req.body.userId;
 
+        // Find active meeting by ID and populate host and participant details
         const meeting = await Meeting.findOne({ meetingId, isActive: true })
             .populate('host', 'username email')
             .populate('participants', 'username email');
 
+        // Validate meeting exists and is active
         if (!meeting) {
             return res.status(404).json({
                 success: false,
@@ -67,7 +92,7 @@ export const joinMeeting = async (req, res) => {
             });
         }
 
-        // Check if meeting is at capacity
+        // Check if meeting has reached maximum capacity
         if (meeting.currentParticipants.length >= meeting.maxParticipants) {
             return res.status(400).json({
                 success: false,
@@ -75,16 +100,18 @@ export const joinMeeting = async (req, res) => {
             });
         }
 
-        // Check if user is already a participant
+        // Check if user is already in the participants list
         const isAlreadyParticipant = meeting.participants.some(
             participant => participant._id.toString() === userId
         );
 
+        // Add user to participants list if not already present
         if (!isAlreadyParticipant) {
             meeting.participants.push(userId);
             await meeting.save();
         }
 
+        // Return success response with complete meeting information
         res.status(200).json({
             success: true,
             message: 'Successfully joined meeting',
@@ -101,6 +128,7 @@ export const joinMeeting = async (req, res) => {
             }
         });
     } catch (error) {
+        // Handle any errors during meeting join process
         console.error('Error joining meeting:', error);
         res.status(500).json({
             success: false,
@@ -110,15 +138,24 @@ export const joinMeeting = async (req, res) => {
     }
 };
 
+/**
+ * Get meeting details
+ * @route GET /api/meetings/:meetingId
+ * @desc Retrieves detailed information about a specific meeting
+ * @access Private (requires authentication)
+ */
 export const getMeeting = async (req, res) => {
     try {
+        // Extract meeting ID from URL parameters
         const { meetingId } = req.params;
 
+        // Find active meeting and populate all related user information
         const meeting = await Meeting.findOne({ meetingId, isActive: true })
             .populate('host', 'username email')
             .populate('participants', 'username email')
             .populate('currentParticipants.userId', 'username email');
 
+        // Validate meeting exists and is active
         if (!meeting) {
             return res.status(404).json({
                 success: false,
@@ -126,11 +163,13 @@ export const getMeeting = async (req, res) => {
             });
         }
 
+        // Return complete meeting information
         res.status(200).json({
             success: true,
             meeting
         });
     } catch (error) {
+        // Handle any errors during meeting retrieval
         console.error('Error fetching meeting:', error);
         res.status(500).json({
             success: false,
@@ -140,26 +179,36 @@ export const getMeeting = async (req, res) => {
     }
 };
 
+/**
+ * Get all meetings for a specific user
+ * @route GET /api/meetings/user/meetings
+ * @desc Retrieves all meetings where user is either host or participant
+ * @access Private (requires authentication)
+ */
 export const getUserMeetings = async (req, res) => {
     try {
+        // Get user ID from authenticated user or query parameters (fallback for testing)
         const userId = req.user?.id || req.query.userId;
 
+        // Find all active meetings where user is either host or participant
         const meetings = await Meeting.find({
             $or: [
-                { host: userId },
-                { participants: userId }
+                { host: userId },        // User is the meeting host
+                { participants: userId } // User is in participants list
             ],
-            isActive: true
+            isActive: true // Only fetch active meetings
         })
-        .populate('host', 'username email')
-        .populate('participants', 'username email')
-        .sort({ startTime: -1 });
+        .populate('host', 'username email')        // Populate host details
+        .populate('participants', 'username email') // Populate participants details
+        .sort({ startTime: -1 });                 // Sort by start time (newest first)
 
+        // Return user's meetings
         res.status(200).json({
             success: true,
             meetings
         });
     } catch (error) {
+        // Handle any errors during meetings retrieval
         console.error('Error fetching user meetings:', error);
         res.status(500).json({
             success: false,
@@ -169,13 +218,23 @@ export const getUserMeetings = async (req, res) => {
     }
 };
 
+/**
+ * End a meeting
+ * @route PATCH /api/meetings/end/:meetingId
+ * @desc Ends an active meeting (only host can end the meeting)
+ * @access Private (requires authentication and host privileges)
+ */
 export const endMeeting = async (req, res) => {
     try {
+        // Extract meeting ID from URL parameters
         const { meetingId } = req.params;
+        // Get user ID from authenticated user or request body (fallback for testing)
         const userId = req.user?.id || req.body.userId;
 
+        // Find active meeting by ID
         const meeting = await Meeting.findOne({ meetingId, isActive: true });
 
+        // Validate meeting exists and is still active
         if (!meeting) {
             return res.status(404).json({
                 success: false,
@@ -183,7 +242,7 @@ export const endMeeting = async (req, res) => {
             });
         }
 
-        // Check if user is the host
+        // Authorization check: Only meeting host can end the meeting
         if (meeting.host.toString() !== userId) {
             return res.status(403).json({
                 success: false,
@@ -191,17 +250,21 @@ export const endMeeting = async (req, res) => {
             });
         }
 
+        // Update meeting status to inactive
         meeting.isActive = false;
-        meeting.endTime = new Date();
-        meeting.currentParticipants = []; // Clear active participants
+        meeting.endTime = new Date();           // Set actual end time
+        meeting.currentParticipants = [];       // Clear all active participants
 
+        // Save changes to database
         await meeting.save();
 
+        // Return success response
         res.status(200).json({
             success: true,
             message: 'Meeting ended successfully'
         });
     } catch (error) {
+        // Handle any errors during meeting termination
         console.error('Error ending meeting:', error);
         res.status(500).json({
             success: false,

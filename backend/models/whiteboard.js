@@ -292,6 +292,7 @@ const whiteboardSchema = new mongoose.Schema({
 });
 
 // Indexes for better performance
+//Indexes tell MongoDB to create special data structures for quick lookup.
 whiteboardSchema.index({ meetingId: 1, isActive: 1 });
 whiteboardSchema.index({ 'meeting': 1 });
 whiteboardSchema.index({ 'elements.createdBy': 1 });
@@ -316,6 +317,14 @@ whiteboardSchema.pre('save', function(next) {
             .slice(0, 100);
     }
     next();
+ /*   This code runs automatically before each .save() on the whiteboard document.
+It:
+Checks if there’s a collaborationHistory array.
+If it has more than 100 entries:
+Sorts by most recent (b.timestamp - a.timestamp)
+Keeps only the latest 100 records
+Removes old ones (to save database space and keep performance high)
+So your history doesn’t grow endlessly and slow down queries.*/
 });
 
 export default mongoose.model('Whiteboard', whiteboardSchema);

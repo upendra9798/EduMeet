@@ -21,7 +21,7 @@ import {
     getSessionByWhiteboard,
     recordDrawingEvent
 } from '../controllers/whiteboardSessionController.js';
-import { protect } from '../middleware/auth.js'; // Assuming you have auth middleware
+import { protect } from '../middleware/auth.middleware.js'; // Assuming you have auth middleware
 
 const router = express.Router();
 
