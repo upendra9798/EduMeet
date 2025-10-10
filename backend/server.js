@@ -8,8 +8,10 @@ import { fileURLToPath } from 'url'
 
 import http from "http";
 import { Server } from 'socket.io'
-import whiteboardSocket from './sockets/whiteboardSocket.js'
-import meetingSocket from './sockets/meetingSocket.js'
+import whiteboardSocketHandler from './socket/whiteboardSocket.js'
+import meetingSocket from './socket/meetingSocket.js'
+import whiteboardRoutes from './routes/whiteboardRoutes.js'
+import meetingRoutes from './routes/meetingRoutes.js'
 
 // Get current directory for ES modules
 const __filename = fileURLToPath(import.meta.url)
@@ -46,14 +48,15 @@ const io = new Server(server, {
 // methods: ["GET", "POST"]: Specifies which HTTP methods are allowed for CORS requests
 // This ensures that browsers won’t block the WebSocket connection due to CORS issues.
 
-// ✅ Initialize all socket features (whiteboard, chat, etc.)
-whiteboardSocket(io);
+// ✅ Initialize all socket features (whiteboard, meeting, etc.)
+whiteboardSocketHandler(io);
 meetingSocket(io);
 
-// API routes (to be added)
+// API routes
+app.use('/api/whiteboard', whiteboardRoutes)
+app.use('/api/meetings', meetingRoutes)
 // app.use('/api/auth', authRoutes)
 // app.use('/api/users', userRoutes)
-// app.use('/api/meetings', meetingRoutes)
 
 server.listen(PORT, () => {
     connectMongoDB()
