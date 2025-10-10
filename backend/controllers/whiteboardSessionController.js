@@ -1,3 +1,12 @@
+/*🧩 Context: What this file is
+This controller manages all API requests related to real-time whiteboard collaboration sessions — for example:
+joining and leaving a session, tracking who’s online
+updating cursor position or tool, recording activity metrics
+It interacts with:
+MongoDB models (Whiteboard, Meeting, WhiteboardSession)
+Service layer (WhiteboardSessionService) which holds reusable business logic
+*/
+
 import WhiteboardSession from '../models/whiteboardSession.js';
 import Whiteboard from '../models/whiteboard.js';
 import Meeting from '../models/meeting.js';

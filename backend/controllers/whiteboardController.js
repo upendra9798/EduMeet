@@ -80,6 +80,7 @@ export const createWhiteboard = async (req, res) => {
 // @desc    Get whiteboard by meeting ID
 // @route   GET /api/whiteboard/:meetingId
 // @access  Private
+// 👉 Used when a user joins a meeting and needs to load the whiteboard data.
 export const getWhiteboardByMeeting = async (req, res) => {
     try {
         const { meetingId } = req.params;
@@ -322,6 +323,7 @@ export const updatePermissions = async (req, res) => {
 // @desc    Export whiteboard
 // @route   POST /api/whiteboard/:whiteboardId/export
 // @access  Private
+// Create an export URL (in a real app, generate PNG/PDF).
 export const exportWhiteboard = async (req, res) => {
     try {
         const { whiteboardId } = req.params;
