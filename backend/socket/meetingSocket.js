@@ -235,10 +235,33 @@ const meetingSocket = (io) => {
       }
     });
 
+    // Chat message handling
+    socket.on("send-message", (data) => {
+      try {
+        const { meetingId, message } = data;
+        const roomId = `meeting-${meetingId}`;
+        
+        // Verify the user is in this meeting
+        const userSession = userMeetings[socket.id];
+        if (!userSession || userSession.meetingId !== meetingId) {
+          socket.emit('meeting-error', { message: 'You are not in this meeting' });
+          return;
+        }
+
+        // Broadcast message to all other participants in the room
+        socket.to(roomId).emit("message-received", message);
+        console.log(`💬 Message sent in meeting ${meetingId} by ${message.sender}`);
+        
+      } catch (error) {
+        console.error('Error sending message:', error);
+        socket.emit('meeting-error', { message: 'Failed to send message' });
+      }
+    });
+
     /*
      When a user disconnects:
       - Remove them from all rooms they were part of.
-      - Notify others in the same room via “user-left”.
+      - Notify others in the same room via "user-left".
       - Delete empty rooms to free memory.
     */
   });

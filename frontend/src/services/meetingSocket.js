@@ -21,7 +21,23 @@ class MeetingSocket {
    * @param {string} userId - Current user ID
    */
   connect(userId) {
+    console.log('MeetingSocket.connect called with userId:', userId);
+    console.log('Current connection state - isConnected:', this.isConnected, 'socket:', !!this.socket);
+    
+    // If already connected with the same user, don't reconnect
+    if (this.isConnected && this.userId === userId && this.socket) {
+      console.log('Already connected with same userId, skipping reconnect');
+      return;
+    }
+    
+    // Disconnect existing connection if any
+    if (this.socket) {
+      console.log('Disconnecting existing socket connection');
+      this.socket.disconnect();
+    }
+    
     this.userId = userId;
+    console.log('Creating new socket connection to:', `${SOCKET_URL}/meeting`);
     this.socket = io(`${SOCKET_URL}/meeting`, {
       transports: ['websocket', 'polling'],
       timeout: 20000,
@@ -76,6 +92,12 @@ class MeetingSocket {
 
     this.socket.on('ice-candidate', (data) => {
       this.emit('ice-candidate', data);
+    });
+
+    // Chat message events
+    this.socket.on('message-received', (message) => {
+      console.log('MeetingSocket received message from server:', message);
+      this.emit('message-received', message);
     });
   }
 
@@ -139,6 +161,32 @@ class MeetingSocket {
   }
 
   /**
+   * Send chat message to meeting participants
+   * @param {string} meetingId - Meeting ID
+   * @param {Object} message - Message object with text, sender, timestamp
+   */
+  sendMessage(meetingId, message) {
+    console.log('MeetingSocket.sendMessage called:');
+    console.log('- meetingId:', meetingId);
+    console.log('- this.meetingId:', this.meetingId);
+    console.log('- isConnected:', this.isConnected);
+    console.log('- message:', message);
+    
+    if (this.isConnected && this.meetingId === meetingId) {
+      console.log('Sending message via socket...');
+      this.socket.emit('send-message', {
+        meetingId,
+        message
+      });
+      console.log('Message sent via socket');
+    } else {
+      console.warn('Cannot send message - conditions not met:');
+      console.warn('- isConnected:', this.isConnected);
+      console.warn('- meetingId match:', this.meetingId === meetingId);
+    }
+  }
+
+  /**
    * Register event handler
    * @param {string} event - Event name
    * @param {Function} handler - Event handler function
@@ -153,11 +201,16 @@ class MeetingSocket {
   /**
    * Unregister event handler
    * @param {string} event - Event name
-   * @param {Function} handler - Event handler function to remove
+   * @param {Function} handler - Event handler function to remove (optional - if not provided, removes all handlers for the event)
    */
   off(event, handler) {
     if (this.eventHandlers[event]) {
-      this.eventHandlers[event] = this.eventHandlers[event].filter(h => h !== handler);
+      if (handler) {
+        this.eventHandlers[event] = this.eventHandlers[event].filter(h => h !== handler);
+      } else {
+        // Remove all handlers for this event
+        this.eventHandlers[event] = [];
+      }
     }
   }
 

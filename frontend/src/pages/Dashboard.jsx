@@ -39,117 +39,173 @@ const Dashboard = ({ user }) => {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="h-screen overflow-hidden bg-gradient-to-br from-violet-900 via-purple-900 to-indigo-900 flex flex-col">
+      {/* Animated Background Elements */}
+      <div className="absolute inset-0 overflow-hidden">
+        <div className="absolute top-0 left-0 w-72 h-72 bg-purple-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-pulse"></div>
+        <div className="absolute top-0 right-0 w-72 h-72 bg-yellow-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-pulse animation-delay-2000"></div>
+        <div className="absolute -bottom-8 left-20 w-72 h-72 bg-pink-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-pulse animation-delay-4000"></div>
+        <div className="absolute bottom-0 right-0 w-96 h-96 bg-blue-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-pulse animation-delay-1000"></div>
+      </div>
+
       {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <header className="relative z-10 bg-black/20 backdrop-blur-xl border-b border-white/10 flex-shrink-0">
+        <div className="max-w-7xl mx-auto px-6">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center">
               <button
                 onClick={() => navigate('/')}
-                className="mr-4 p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md"
+                className="mr-4 p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-all duration-200"
               >
                 <ArrowLeft className="w-5 h-5" />
               </button>
-              <h1 className="text-2xl font-bold text-blue-600">EduMeet</h1>
-              <span className="ml-4 text-gray-600">Dashboard</span>
+              <div className="flex items-center space-x-3">
+                <div className="w-8 h-8 bg-gradient-to-r from-pink-500 to-violet-500 rounded-lg flex items-center justify-center">
+                  <span className="text-white font-bold">E</span>
+                </div>
+                <h1 className="text-xl font-bold text-white">EduMeet</h1>
+              </div>
             </div>
             <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-2 bg-green-500/20 rounded-full px-3 py-1">
+                <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                <span className="text-green-300 text-sm font-medium">Online</span>
+              </div>
               <div className="flex items-center space-x-2">
-                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                  <span className="text-blue-600 font-medium text-sm">
-                    {user.username.charAt(0).toUpperCase()}
-                  </span>
+                <span className="text-white/90 font-medium">{user.username}</span>
+                <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-bold text-sm">
+                  {user.username.charAt(0).toUpperCase()}
                 </div>
-                <span className="text-sm text-gray-700">{user.username}</span>
               </div>
             </div>
           </div>
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            Welcome back, {user.username}!
-          </h1>
-          <p className="text-gray-600">
-            Manage your meetings, create new sessions, and collaborate with others.
-          </p>
-        </div>
-
-        {/* Tab Navigation */}
-        <div className="border-b border-gray-200 mb-8">
-          <nav className="-mb-px flex space-x-8">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setSearchParams({ tab: tab.id })}
-                className={`flex items-center py-2 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === tab.id
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                {tab.icon}
-                <span className="ml-2">{tab.label}</span>
-              </button>
-            ))}
-          </nav>
-        </div>
-
-        {/* Tab Content */}
-        <div className="mb-8">
-          {activeTab === 'meetings' && (
-            <div>
-              <MeetingList 
-                userId={user.id} 
-                onJoinMeeting={handleJoinFromList}
-                key={refreshTrigger} // Force re-render when meetings are updated
-              />
+      {/* Main Content */}
+      <div className="relative z-10 flex-1 flex flex-col min-h-0">
+        <div className="flex-1 max-w-7xl mx-auto px-6 py-4 flex flex-col min-h-0 w-full">
+          {/* Welcome Section */}
+          <div className="mb-4 flex-shrink-0">
+            <div className="text-center">
+              <h1 className="text-3xl font-bold text-white mb-1">
+                Welcome back, <span className="bg-gradient-to-r from-pink-400 to-violet-400 bg-clip-text text-transparent">{user.username}!</span>
+              </h1>
+              <p className="text-white/70">Ready to learn? Start or join a meeting now</p>
             </div>
-          )}
-          
-          {activeTab === 'create' && (
-            <div className="max-w-2xl mx-auto">
-              <div className="mb-6 text-center">
-                <h2 className="text-2xl font-bold text-gray-900 mb-2">Create New Meeting</h2>
-                <p className="text-gray-600">
-                  Set up a new meeting with custom settings and invite participants.
-                </p>
+          </div>
+
+          {/* Tab Navigation */}
+          <div className="bg-white/10 backdrop-blur-xl rounded-2xl p-2 mb-4 border border-white/20">
+            <nav className="flex space-x-2">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setSearchParams({ tab: tab.id })}
+                  className={`flex items-center py-2 px-4 rounded-xl font-medium text-sm transition-all duration-300 ${
+                    activeTab === tab.id
+                      ? 'bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-500 text-white shadow-2xl transform scale-105'
+                      : 'text-white/70 hover:text-white hover:bg-white/10 hover:scale-102'
+                  }`}
+                >
+                  <div className="mr-2">
+                    {tab.icon}
+                  </div>
+                  <span className="font-semibold">{tab.label}</span>
+                </button>
+              ))}
+            </nav>
+          </div>
+
+          {/* Tab Content */}
+          <div className="flex-1 min-h-0 flex flex-col">
+            {activeTab === 'meetings' && (
+              <div className="h-full bg-white/10 backdrop-blur-xl rounded-2xl border border-white/20 overflow-hidden flex flex-col">
+                <div className="bg-gradient-to-r from-blue-500/20 to-purple-500/20 p-4 border-b border-white/10 flex-shrink-0">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h2 className="text-xl font-bold text-white mb-1">My Meetings</h2>
+                      <p className="text-white/70">Manage and join your scheduled meetings</p>
+                    </div>
+                    <div className="bg-white/20 rounded-xl p-3">
+                      <Calendar className="w-6 h-6 text-white" />
+                    </div>
+                  </div>
+                </div>
+                <div className="p-6 flex-1 overflow-y-auto">
+                  <MeetingList 
+                    userId={user.id} 
+                    onJoinMeeting={handleJoinFromList}
+                    key={refreshTrigger}
+                  />
+                </div>
               </div>
-              <CreateMeeting onMeetingCreated={handleMeetingCreated} />
-            </div>
-          )}
-          
-          {activeTab === 'join' && (
-            <div className="max-w-2xl mx-auto">
-              <div className="mb-6 text-center">
-                <h2 className="text-2xl font-bold text-gray-900 mb-2">Join Existing Meeting</h2>
-                <p className="text-gray-600">
-                  Enter a meeting ID to join an ongoing session.
-                </p>
+            )}
+            
+            {activeTab === 'create' && (
+              <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-white/5">
+                <div className="flex justify-center py-4">
+                  <div className="w-full max-w-xl bg-white/10 backdrop-blur-xl rounded-2xl border border-white/20 overflow-hidden">
+                    <div className="bg-gradient-to-r from-green-500/20 to-emerald-500/20 p-4 text-center border-b border-white/10">
+                      <div className="inline-flex items-center justify-center w-12 h-12 bg-gradient-to-r from-green-400 to-emerald-400 rounded-full text-white mb-2 shadow-2xl">
+                        <Plus className="w-6 h-6" />
+                      </div>
+                      <h2 className="text-lg font-bold text-white mb-1">Create New Meeting</h2>
+                      <p className="text-white/70 text-sm">
+                        Set up a new meeting with custom settings
+                      </p>
+                    </div>
+                    <div className="p-6">
+                      <CreateMeeting onMeetingCreated={handleMeetingCreated} user={user} />
+                    </div>
+                  </div>
+                </div>
               </div>
-              <JoinMeeting onMeetingJoined={handleMeetingJoined} />
-            </div>
-          )}
-        </div>
+            )}
+            
+            {activeTab === 'join' && (
+              <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-white/5">
+                <div className="flex justify-center py-4">
+                  <div className="w-full max-w-xl bg-white/10 backdrop-blur-xl rounded-2xl border border-white/20 overflow-hidden">
+                    <div className="bg-gradient-to-r from-purple-500/20 to-pink-500/20 p-4 text-center border-b border-white/10">
+                      <div className="inline-flex items-center justify-center w-12 h-12 bg-gradient-to-r from-purple-400 to-pink-400 rounded-full text-white mb-2 shadow-2xl">
+                        <LogIn className="w-6 h-6" />
+                      </div>
+                      <h2 className="text-lg font-bold text-white mb-1">Join Existing Meeting</h2>
+                      <p className="text-white/70 text-sm">
+                        Enter a meeting ID to join an ongoing session
+                      </p>
+                    </div>
+                    <div className="p-6">
+                      <JoinMeeting onMeetingJoined={handleMeetingJoined} user={user} />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
 
-        {/* Quick Stats */}
-        <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Quick Stats</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-blue-50 p-4 rounded-lg">
-              <div className="text-2xl font-bold text-blue-600">0</div>
-              <div className="text-sm text-gray-600">Active Meetings</div>
-            </div>
-            <div className="bg-green-50 p-4 rounded-lg">
-              <div className="text-2xl font-bold text-green-600">0</div>
-              <div className="text-sm text-gray-600">Meetings Today</div>
-            </div>
-            <div className="bg-purple-50 p-4 rounded-lg">
-              <div className="text-2xl font-bold text-purple-600">0</div>
-              <div className="text-sm text-gray-600">Total Hours</div>
+          {/* Quick Stats - Bottom Bar */}
+          <div className="mt-2 bg-white/10 backdrop-blur-xl rounded-xl border border-white/20 p-3 flex-shrink-0">
+            <div className="grid grid-cols-3 gap-3">
+              <div className="text-center group cursor-pointer">
+                <div className="bg-gradient-to-r from-blue-400 to-cyan-400 rounded-lg p-2 mb-1 group-hover:scale-110 transition-transform">
+                  <div className="text-lg font-bold text-white">0</div>
+                </div>
+                <div className="text-white/70 text-xs font-medium">Active Meetings</div>
+              </div>
+              <div className="text-center group cursor-pointer">
+                <div className="bg-gradient-to-r from-green-400 to-emerald-400 rounded-lg p-2 mb-1 group-hover:scale-110 transition-transform">
+                  <div className="text-lg font-bold text-white">0</div>
+                </div>
+                <div className="text-white/70 text-xs font-medium">Today's Sessions</div>
+              </div>
+              <div className="text-center group cursor-pointer">
+                <div className="bg-gradient-to-r from-purple-400 to-pink-400 rounded-lg p-2 mb-1 group-hover:scale-110 transition-transform">
+                  <div className="text-lg font-bold text-white">0</div>
+                </div>
+                <div className="text-white/70 text-xs font-medium">Total Hours</div>
+              </div>
             </div>
           </div>
         </div>

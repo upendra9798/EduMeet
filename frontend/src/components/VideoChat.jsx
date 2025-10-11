@@ -4,39 +4,52 @@ import { v4 as uuidv4 } from "uuid";
 
 /**
  * 🎥 VideoChat Component
- * Handles joining/creating meeting rooms and connecting users with WebRTC.
+ * Handles video streaming for existing meeting rooms.
  * Uses Socket.IO for signaling (offer/answer/ICE exchange).
  */
-export default function VideoChat() {
-  const [roomId, setRoomId] = useState("");
+export default function VideoChat({ meetingId, userId, localStream }) {
   const [joined, setJoined] = useState(false);
   const localVideoRef = useRef(null);
   const localStreamRef = useRef(null);
   const pcRef = useRef({}); // Each user gets its own RTCPeerConnection instance
 
-  /** 🏠 Create unique Room ID */
-  const createRoom = () => {
-    const id = uuidv4().slice(0, 8);
-    setRoomId(id);
-  };
+  /** 🚪 Auto-join the meeting room */
+  useEffect(() => {
+    if (meetingId && userId && !joined) {
+      joinMeetingRoom();
+    }
+  }, [meetingId, userId]);
 
-  /** 🚪 Join a room (existing or new) */
-  const joinRoom = async () => {
-    if (!roomId.trim()) return alert("Please enter or create a Room ID!");
-    setJoined(true);
+  /** 🎥 Set up local video stream */
+  useEffect(() => {
+    if (localStream && localVideoRef.current) {
+      localVideoRef.current.srcObject = localStream;
+      localStreamRef.current = localStream;
+      console.log('VideoChat: Local stream set up');
+    }
+  }, [localStream]);
 
-    // Access camera and microphone
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: true,
-      audio: true,
-    });
+  const joinMeetingRoom = async () => {
+    if (!meetingId) return;
+    
+    try {
+      setJoined(true);
 
-    // Attach local video stream
-    localVideoRef.current.srcObject = stream;
-    localStreamRef.current = stream;
+      // Use the passed localStream instead of creating a new one
+      if (localStream) {
+        if (localVideoRef.current) {
+          localVideoRef.current.srcObject = localStream;
+        }
+        localStreamRef.current = localStream;
+      }
 
-    // Notify server
-    socket.emit("join-room", roomId);
+      // Notify server
+      socket.emit("join-room", meetingId);
+      console.log('VideoChat: Joined meeting room', meetingId);
+    } catch (error) {
+      console.error('Error joining meeting room:', error);
+      setJoined(false);
+    }
   };
 
   /** 🔗 WebRTC signaling logic via Socket.IO */
@@ -134,64 +147,34 @@ export default function VideoChat() {
 
   /** 🖥️ UI */
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 text-gray-800 p-4">
-      {!joined ? (
-        // 🔹 Lobby Screen
-        <div className="bg-white p-6 rounded-2xl shadow-lg w-full max-w-md text-center">
-          <h2 className="text-2xl font-bold mb-4 text-gray-700">
-            🎥 Join or Create a Meeting
-          </h2>
-
-          <div className="flex gap-2 mb-3">
-            <input
-              type="text"
-              placeholder="Enter Room ID"
-              value={roomId}
-              onChange={(e) => setRoomId(e.target.value)}
-              className="flex-1 border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-400 outline-none"
-            />
-            <button
-              onClick={createRoom}
-              className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-            >
-              New
-            </button>
-          </div>
-
-          <button
-            onClick={joinRoom}
-            className="w-full py-2 mt-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition"
-          >
-            Join Room
-          </button>
+    <div className="flex flex-col items-center justify-center h-full bg-black text-white p-4">
+      {!joined && meetingId ? (
+        // 🔹 Connecting Screen
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-blue-500/30 rounded-full animate-spin border-t-blue-400 mx-auto mb-4"></div>
+          <h2 className="text-xl font-semibold mb-2">Connecting to video...</h2>
+          <p className="text-gray-400">Setting up your camera and microphone</p>
         </div>
-      ) : (
+      ) : joined ? (
         // 🔹 Meeting Screen
-        <div className="w-full max-w-5xl bg-white p-6 rounded-2xl shadow-lg">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-semibold">
-              Room ID: <span className="text-blue-600">{roomId}</span>
-            </h3>
-            <button
-              onClick={() => window.location.reload()}
-              className="text-red-500 hover:underline"
-            >
-              Leave
-            </button>
-          </div>
-
+        <div className="w-full h-full">
           <div
             id="video-grid"
-            className="flex flex-wrap justify-center gap-4 border-t pt-4"
+            className="flex flex-wrap justify-center gap-4 h-full items-center"
           >
             <video
               ref={localVideoRef}
               autoPlay
               muted
               playsInline
-              className="w-48 md:w-60 border-2 border-green-400 rounded-xl shadow-md"
+              className="w-full max-w-md h-64 bg-gray-800 rounded-xl shadow-lg object-cover"
             />
           </div>
+        </div>
+      ) : (
+        // 🔹 No meeting ID provided
+        <div className="text-center">
+          <p className="text-gray-400">No meeting room specified</p>
         </div>
       )}
     </div>

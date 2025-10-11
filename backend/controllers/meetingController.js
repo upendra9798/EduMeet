@@ -79,10 +79,8 @@ export const joinMeeting = async (req, res) => {
         // Get user ID from authenticated user or request body (fallback for testing)
         const userId = req.user?.id || req.body.userId;
 
-        // Find active meeting by ID and populate host and participant details
-        const meeting = await Meeting.findOne({ meetingId, isActive: true })
-            .populate('host', 'username email')
-            .populate('participants', 'username email');
+        // Find active meeting by ID
+        const meeting = await Meeting.findOne({ meetingId, isActive: true });
 
         // Validate meeting exists and is active
         if (!meeting) {
@@ -101,9 +99,7 @@ export const joinMeeting = async (req, res) => {
         }
 
         // Check if user is already in the participants list
-        const isAlreadyParticipant = meeting.participants.some(
-            participant => participant._id.toString() === userId
-        );
+        const isAlreadyParticipant = meeting.participants.includes(userId);
 
         // Add user to participants list if not already present
         if (!isAlreadyParticipant) {
@@ -149,11 +145,8 @@ export const getMeeting = async (req, res) => {
         // Extract meeting ID from URL parameters
         const { meetingId } = req.params;
 
-        // Find active meeting and populate all related user information
-        const meeting = await Meeting.findOne({ meetingId, isActive: true })
-            .populate('host', 'username email')
-            .populate('participants', 'username email')
-            .populate('currentParticipants.userId', 'username email');
+        // Find active meeting
+        const meeting = await Meeting.findOne({ meetingId, isActive: true });
 
         // Validate meeting exists and is active
         if (!meeting) {
@@ -198,8 +191,6 @@ export const getUserMeetings = async (req, res) => {
             ],
             isActive: true // Only fetch active meetings
         })
-        .populate('host', 'username email')        // Populate host details
-        .populate('participants', 'username email') // Populate participants details
         .sort({ startTime: -1 });                 // Sort by start time (newest first)
 
         // Return user's meetings

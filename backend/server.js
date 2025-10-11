@@ -25,7 +25,7 @@ const PORT = process.env.PORT || 5001
 
 // Middleware
 app.use(cors({
-    origin: process.env.FRONTEND_URL || "http://localhost:3000",
+    origin: ["http://localhost:3000", "http://localhost:5173", "http://localhost:5174", "http://localhost:5175", "http://localhost:5176"],
     credentials: true
 }))
 app.use(express.json())
@@ -40,7 +40,7 @@ const server = http.createServer(app)
 
 // ⚡ 2️⃣ Attaching Socket.IO
 const io = new Server(server, {
-    cors: { origin: "http://localhost:5173", methods: ["GET", "POST"] },
+    cors: { origin: ["http://localhost:3000", "http://localhost:5173", "http://localhost:5174", "http://localhost:5175", "http://localhost:5176"], methods: ["GET", "POST"] },
 })
 //new Server(server, options) creates a Socket.IO server instance. Attaches Socket.IO to the HTTP server created above
 // Enables real-time, bidirectional communication between client and server

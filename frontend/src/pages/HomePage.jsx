@@ -52,95 +52,193 @@ const HomePage = ({ user }) => {
       </header>
 
       {/* Hero Section */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 pb-24">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-32">
         <div className="text-center">
-          <h1 className="text-4xl tracking-tight font-extrabold text-gray-900 sm:text-5xl md:text-6xl">
+          <div className="mb-8 inline-flex items-center px-4 py-2 rounded-full text-sm font-medium bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 border border-blue-200">
+            <span className="w-2 h-2 bg-green-400 rounded-full mr-2 animate-pulse"></span>
+            Now available with enhanced collaboration tools
+          </div>
+          
+          <h1 className="text-5xl sm:text-6xl lg:text-7xl font-extrabold text-gray-900 tracking-tight">
             <span className="block">Transform Your</span>
-            <span className="block text-blue-600">Online Education</span>
+            <span className="block bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+              Online Education
+            </span>
           </h1>
-          <p className="mt-3 max-w-md mx-auto text-base text-gray-500 sm:text-lg md:mt-5 md:text-xl md:max-w-3xl">
+          
+          <p className="mt-6 max-w-2xl mx-auto text-xl text-gray-600 leading-relaxed">
             Connect, collaborate, and create with our comprehensive platform designed for modern education. 
             Video meetings, interactive whiteboards, and real-time collaboration tools all in one place.
           </p>
           
-          <div className="mt-5 max-w-md mx-auto sm:flex sm:justify-center md:mt-8">
-            <div className="rounded-md shadow">
-              <button
-                onClick={() => navigate('/dashboard')}
-                className="w-full flex items-center justify-center px-8 py-3 border border-transparent text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 md:py-4 md:text-lg md:px-10 transition-colors"
-              >
-                Get Started
-                <ArrowRight className="ml-2 w-5 h-5" />
-              </button>
+          <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
+            <button
+              onClick={() => navigate('/dashboard')}
+              className="group relative inline-flex items-center justify-center px-8 py-4 text-lg font-semibold text-white bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl hover:from-blue-700 hover:to-purple-700 transform hover:scale-105 transition-all duration-200 shadow-lg hover:shadow-xl"
+            >
+              Get Started Free
+              <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
+            </button>
+            
+            <button
+              onClick={() => navigate('/dashboard?tab=join')}
+              className="inline-flex items-center justify-center px-8 py-4 text-lg font-semibold text-gray-900 bg-white rounded-xl border-2 border-gray-300 hover:border-gray-400 hover:bg-gray-50 transform hover:scale-105 transition-all duration-200 shadow-lg hover:shadow-xl"
+            >
+              Join Meeting
+            </button>
+          </div>
+          
+          <div className="mt-12 flex justify-center items-center space-x-6 text-sm text-gray-500">
+            <div className="flex items-center">
+              <div className="w-2 h-2 bg-green-400 rounded-full mr-2"></div>
+              Free to use
+            </div>
+            <div className="flex items-center">
+              <div className="w-2 h-2 bg-blue-400 rounded-full mr-2"></div>
+              No download required
+            </div>
+            <div className="flex items-center">
+              <div className="w-2 h-2 bg-purple-400 rounded-full mr-2"></div>
+              Secure & private
             </div>
           </div>
         </div>
 
         {/* Features Section */}
-        <div className="mt-24">
+        <div className="mt-32">
           <div className="text-center">
-            <h2 className="text-3xl font-extrabold text-gray-900">
-              Everything you need for online education
+            <div className="inline-flex items-center px-4 py-2 rounded-full text-sm font-medium bg-blue-50 text-blue-700 border border-blue-200 mb-6">
+              ✨ Powerful Features
+            </div>
+            <h2 className="text-4xl font-bold text-gray-900 mb-4">
+              Everything you need for 
+              <span className="block text-blue-600">online education</span>
             </h2>
-            <p className="mt-4 max-w-2xl mx-auto text-xl text-gray-500">
-              Built specifically for educators and students with tools that enhance learning
+            <p className="mt-4 max-w-3xl mx-auto text-xl text-gray-600">
+              Built specifically for educators and students with tools that enhance learning and engagement
             </p>
           </div>
 
-          <div className="mt-12 grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-16 grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
             {features.map((feature, index) => (
-              <div key={index} className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
-                <div className="text-blue-600 mb-4">
-                  {feature.icon}
+              <div 
+                key={index} 
+                className="group relative bg-white rounded-2xl shadow-lg p-8 hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 border border-gray-100"
+              >
+                <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                <div className="relative">
+                  <div className="inline-flex items-center justify-center w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-xl mb-6 group-hover:scale-110 transition-transform duration-300">
+                    {feature.icon}
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-900 mb-3">
+                    {feature.title}
+                  </h3>
+                  <p className="text-gray-600 leading-relaxed">
+                    {feature.description}
+                  </p>
                 </div>
-                <h3 className="text-lg font-medium text-gray-900 mb-2">
-                  {feature.title}
-                </h3>
-                <p className="text-gray-500">
-                  {feature.description}
-                </p>
               </div>
             ))}
           </div>
         </div>
 
         {/* Quick Actions */}
-        <div className="mt-24 bg-white rounded-2xl shadow-lg p-8">
-          <div className="text-center mb-8">
-            <h2 className="text-2xl font-bold text-gray-900">Quick Actions</h2>
-            <p className="text-gray-600 mt-2">Jump right into your educational activities</p>
+        <div className="mt-24 bg-gradient-to-r from-gray-50 to-blue-50 rounded-3xl shadow-xl p-10 border border-blue-100">
+          <div className="text-center mb-10">
+            <div className="inline-flex items-center px-4 py-2 rounded-full text-sm font-medium bg-blue-100 text-blue-700 border border-blue-200 mb-4">
+              ⚡ Quick Actions
+            </div>
+            <h2 className="text-3xl font-bold text-gray-900 mb-2">Ready to get started?</h2>
+            <p className="text-gray-600 text-lg">Jump right into your educational activities in seconds</p>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <button
               onClick={() => navigate('/dashboard?tab=create')}
-              className="p-6 border-2 border-blue-200 rounded-lg hover:border-blue-400 hover:bg-blue-50 transition-all text-left"
+              className="group relative bg-white p-8 border-2 border-blue-200 rounded-2xl hover:border-blue-400 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 text-left overflow-hidden"
             >
-              <div className="flex items-center">
-                <div className="bg-blue-100 p-3 rounded-full">
-                  <Video className="w-6 h-6 text-blue-600" />
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-blue-100 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+              <div className="relative flex items-center">
+                <div className="bg-gradient-to-r from-blue-500 to-blue-600 p-4 rounded-2xl shadow-lg group-hover:scale-110 transition-transform duration-300">
+                  <Video className="w-8 h-8 text-white" />
                 </div>
-                <div className="ml-4">
-                  <h3 className="text-lg font-medium text-gray-900">Start New Meeting</h3>
-                  <p className="text-gray-500">Create an instant meeting or schedule for later</p>
+                <div className="ml-6">
+                  <h3 className="text-xl font-bold text-gray-900 mb-2 group-hover:text-blue-600 transition-colors">Start New Meeting</h3>
+                  <p className="text-gray-600">Create an instant meeting or schedule for later</p>
+                  <div className="flex items-center mt-3 text-blue-600 font-medium">
+                    <span>Get started</span>
+                    <svg className="w-4 h-4 ml-2 group-hover:translate-x-2 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                    </svg>
+                  </div>
                 </div>
               </div>
             </button>
             
             <button
               onClick={() => navigate('/dashboard?tab=join')}
-              className="p-6 border-2 border-green-200 rounded-lg hover:border-green-400 hover:bg-green-50 transition-all text-left"
+              className="group relative bg-white p-8 border-2 border-green-200 rounded-2xl hover:border-green-400 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 text-left overflow-hidden"
             >
-              <div className="flex items-center">
-                <div className="bg-green-100 p-3 rounded-full">
-                  <Users className="w-6 h-6 text-green-600" />
+              <div className="absolute inset-0 bg-gradient-to-br from-green-50 to-green-100 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+              <div className="relative flex items-center">
+                <div className="bg-gradient-to-r from-green-500 to-green-600 p-4 rounded-2xl shadow-lg group-hover:scale-110 transition-transform duration-300">
+                  <Users className="w-8 h-8 text-white" />
                 </div>
-                <div className="ml-4">
-                  <h3 className="text-lg font-medium text-gray-900">Join Meeting</h3>
-                  <p className="text-gray-500">Enter a meeting ID to join an existing session</p>
+                <div className="ml-6">
+                  <h3 className="text-xl font-bold text-gray-900 mb-2 group-hover:text-green-600 transition-colors">Join Meeting</h3>
+                  <p className="text-gray-600">Enter a meeting ID to join an existing session</p>
+                  <div className="flex items-center mt-3 text-green-600 font-medium">
+                    <span>Join now</span>
+                    <svg className="w-4 h-4 ml-2 group-hover:translate-x-2 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                    </svg>
+                  </div>
                 </div>
               </div>
             </button>
+          </div>
+        </div>
+
+        {/* CTA Section */}
+        <div className="mt-24 relative">
+          <div className="absolute inset-0 bg-gradient-to-r from-blue-600 via-purple-600 to-blue-800 rounded-3xl"></div>
+          <div className="absolute inset-0 bg-black/20 rounded-3xl"></div>
+          <div className="relative py-20 px-8 text-center">
+            <div className="inline-flex items-center px-4 py-2 rounded-full text-sm font-medium bg-white/20 text-white border border-white/30 mb-6 backdrop-blur-sm">
+              🚀 Get Started Today
+            </div>
+            <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
+              Ready to transform
+              <span className="block text-yellow-300">your educational experience?</span>
+            </h2>
+            <p className="mt-4 text-xl text-blue-100 max-w-2xl mx-auto">
+              Join thousands of educators and students using EduMeet to create engaging online learning experiences
+            </p>
+            <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center items-center">
+              <button 
+                onClick={() => navigate('/dashboard')}
+                className="group relative px-8 py-4 bg-white text-blue-600 rounded-xl font-semibold hover:bg-gray-50 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl"
+              >
+                <span className="relative flex items-center">
+                  Start Free Trial
+                  <svg className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                  </svg>
+                </span>
+              </button>
+              <button className="group px-8 py-4 bg-transparent text-white rounded-xl font-semibold border-2 border-white/30 hover:bg-white/10 transition-all duration-300 transform hover:scale-105 backdrop-blur-sm">
+                <span className="flex items-center">
+                  Schedule Demo
+                  <svg className="w-5 h-5 ml-2 group-hover:rotate-12 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                </span>
+              </button>
+            </div>
+            
+            {/* Floating elements for visual appeal */}
+            <div className="absolute top-6 left-6 w-20 h-20 bg-yellow-300/20 rounded-full blur-xl"></div>
+            <div className="absolute bottom-6 right-6 w-32 h-32 bg-purple-300/20 rounded-full blur-xl"></div>
           </div>
         </div>
       </main>

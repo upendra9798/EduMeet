@@ -3,6 +3,8 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import Dashboard from './pages/Dashboard';
 import MeetingRoom from './pages/MeetingRoom';
 import HomePage from './pages/HomePage';
+import TestPage from './pages/TestPage';
+import ChatTest from './components/ChatTest';
 
 /**
  * Main App Component
@@ -36,6 +38,18 @@ function App() {
           <Route 
             path="/meeting/:meetingId" 
             element={<MeetingRoom user={user} />} 
+          />
+          
+          {/* Test Page */}
+          <Route 
+            path="/test" 
+            element={<TestPage />} 
+          />
+
+          {/* Chat Test */}
+          <Route 
+            path="/chat-test" 
+            element={<ChatTest />} 
           />
           
           {/* Redirect unknown routes to home */}

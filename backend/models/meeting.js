@@ -11,13 +11,11 @@ const meetingSchema = new mongoose.Schema({
         required: true,
     },
     host: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User',
+        type: String,
         required: true,
     },
     participants: [{
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User',
+        type: String,
     }],
     startTime: {
         type: Date,
@@ -45,8 +43,7 @@ const meetingSchema = new mongoose.Schema({
     },
     currentParticipants: [{
         userId: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: 'User'
+            type: String
         },
         socketId: String,
         joinedAt: {
