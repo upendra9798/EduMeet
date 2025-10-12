@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { 
   Mic, 
   MicOff, 
@@ -24,6 +24,14 @@ import MeetingSocket from '../services/meetingSocket';
 const MeetingRoom = ({ user }) => {
   const { meetingId } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  
+  // Get display name from URL params or use default user name
+  const displayName = searchParams.get('displayName') || user.username;
+  const displayUser = {
+    ...user,
+    username: displayName
+  };
 
   // Meeting state
   const [meeting, setMeeting] = useState(null);
@@ -33,7 +41,8 @@ const MeetingRoom = ({ user }) => {
 
   // UI state
   const [activeView, setActiveView] = useState('video'); // 'video' | 'whiteboard' | 'split'
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [participantsSidebarOpen, setParticipantsSidebarOpen] = useState(false);
+  const [chatSidebarOpen, setChatSidebarOpen] = useState(false);
   const [participants, setParticipants] = useState([]);
 
   // Media controls state
@@ -73,11 +82,11 @@ const MeetingRoom = ({ user }) => {
         await MeetingService.joinMeeting(meetingId, user.id);
         
         // Connect to meeting socket
-        console.log('Connecting to meeting socket with user ID:', user.id);
+        console.log('Connecting to meeting socket with user ID:', user.id, 'display name:', displayUser.username);
         MeetingSocket.connect(user.id);
         setupSocketListeners();
         console.log('Joining meeting:', meetingId);
-        MeetingSocket.joinMeeting(meetingId);
+        MeetingSocket.joinMeeting(meetingId, displayUser.username);
         
         setJoined(true);
       }
@@ -101,15 +110,24 @@ const MeetingRoom = ({ user }) => {
     
     MeetingSocket.on('meeting-joined', (data) => {
       console.log('MeetingRoom: Joined meeting successfully:', data);
-      setParticipants(data.otherUsers || []);
+      // Initialize with empty array - we'll get participants via user-joined events for existing users
+      setParticipants([]);
     });
 
     MeetingSocket.on('user-joined', (data) => {
       console.log('User joined:', data);
       setParticipants(prev => {
-        // Avoid adding duplicates
-        if (!prev.includes(data.userId)) {
-          return [...prev, data.userId];
+        // Always add new participant with their display name and socket ID
+        const newParticipant = {
+          socketId: data.socketId,
+          userId: data.userId,
+          displayName: data.displayName || `User ${data.userId.slice(-4)}`
+        };
+        
+        // Check if this exact socket connection already exists
+        const existingIndex = prev.findIndex(p => p.socketId === data.socketId);
+        if (existingIndex === -1) {
+          return [...prev, newParticipant];
         }
         return prev;
       });
@@ -117,7 +135,7 @@ const MeetingRoom = ({ user }) => {
 
     MeetingSocket.on('user-left', (data) => {
       console.log('User left:', data);
-      setParticipants(prev => prev.filter(p => p !== data.userId));
+      setParticipants(prev => prev.filter(p => p.socketId !== data.socketId));
     });
 
     MeetingSocket.on('meeting-error', (error) => {
@@ -248,7 +266,7 @@ const MeetingRoom = ({ user }) => {
       const message = {
         id: Date.now(),
         text: newMessage.trim(),
-        sender: user.username,
+        sender: displayUser.username,
         senderId: user.id,
         timestamp: new Date(),
         isOwn: true
@@ -449,15 +467,15 @@ const MeetingRoom = ({ user }) => {
           )}
         </main>
 
-        {/* Sidebar */}
-        {sidebarOpen && (
+        {/* Participants Sidebar */}
+        {participantsSidebarOpen && (
           <aside className="w-96 bg-black/40 backdrop-blur-lg text-white border-l border-white/10">
             <div className="p-6">
               {/* Sidebar Header */}
               <div className="flex items-center justify-between mb-6">
-                <h3 className="text-xl font-bold">Meeting Panel</h3>
+                <h3 className="text-xl font-bold">Participants</h3>
                 <button
-                  onClick={() => setSidebarOpen(false)}
+                  onClick={() => setParticipantsSidebarOpen(false)}
                   className="p-2 hover:bg-white/10 rounded-xl transition-colors"
                 >
                   ✕
@@ -477,11 +495,11 @@ const MeetingRoom = ({ user }) => {
                   {/* Current User */}
                   <div className="flex items-center space-x-3 p-3 bg-gradient-to-r from-blue-500/20 to-purple-500/20 rounded-xl border border-blue-500/30">
                     <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center font-bold">
-                      {user.username.charAt(0).toUpperCase()}
+                      {displayUser.username.charAt(0).toUpperCase()}
                     </div>
                     <div className="flex-1">
                       <div className="flex items-center space-x-2">
-                        <span className="font-medium">{user.username}</span>
+                        <span className="font-medium">{displayUser.username}</span>
                         <span className="text-xs text-blue-300">(You)</span>
                       </div>
                       {isHost && (
@@ -494,27 +512,46 @@ const MeetingRoom = ({ user }) => {
                   </div>
                   
                   {/* Other Participants */}
-                  {participants.map((participantId, index) => (
-                    <div key={participantId} className="flex items-center space-x-3 p-3 bg-white/5 rounded-xl border border-white/10 hover:bg-white/10 transition-colors">
+                  {participants.map((participant, index) => (
+                    <div key={participant.socketId} className="flex items-center space-x-3 p-3 bg-white/5 rounded-xl border border-white/10 hover:bg-white/10 transition-colors">
                       <div className="w-10 h-10 bg-gradient-to-r from-gray-500 to-gray-600 rounded-full flex items-center justify-center font-bold text-sm">
-                        U{index + 1}
+                        {participant.displayName.charAt(0).toUpperCase()}
                       </div>
                       <div className="flex-1">
-                        <span className="font-medium">User {participantId.slice(-4)}</span>
+                        <span className="font-medium">{participant.displayName}</span>
+                        {participant.userId === user.id && (
+                          <span className="text-xs text-gray-400 ml-2">(Your other session)</span>
+                        )}
                       </div>
                       <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
                     </div>
                   ))}
                 </div>
               </div>
+            </div>
+          </aside>
+        )}
+
+        {/* Chat Sidebar */}
+        {chatSidebarOpen && (
+          <aside className="w-96 bg-black/40 backdrop-blur-lg text-white border-l border-white/10">
+            <div className="p-6 h-full flex flex-col">
+              {/* Sidebar Header */}
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-bold">Chat</h3>
+                <button
+                  onClick={() => setChatSidebarOpen(false)}
+                  className="p-2 hover:bg-white/10 rounded-xl transition-colors"
+                >
+                  ✕
+                </button>
+              </div>
               
               {/* Chat Section */}
-              <div className="border-t border-white/10 pt-6 flex-1 flex flex-col">
-                <h4 className="text-lg font-semibold text-purple-300 mb-4">Chat</h4>
-                
+              <div className="flex-1 flex flex-col">
                 {/* Messages Area */}
-                <div className="flex-1 bg-gradient-to-br from-purple-500/10 to-pink-500/10 rounded-2xl border border-purple-500/20 flex flex-col overflow-hidden">
-                  <div className="flex-1 p-4 overflow-y-auto max-h-60">
+                <div className="flex-1 bg-gradient-to-br from-purple-500/10 to-pink-500/10 rounded-2xl border border-purple-500/20 flex flex-col overflow-hidden mb-4">
+                  <div className="flex-1 p-4 overflow-y-auto">
                     {messages.length === 0 ? (
                       <div className="text-center text-gray-400 text-sm py-8">
                         <MessageSquare className="w-8 h-8 mx-auto mb-2 opacity-50" />
@@ -543,26 +580,26 @@ const MeetingRoom = ({ user }) => {
                       </div>
                     )}
                   </div>
-                  
-                  {/* Message Input */}
-                  <div className="p-3 border-t border-white/10">
-                    <div className="flex space-x-2">
-                      <input
-                        type="text"
-                        value={newMessage}
-                        onChange={(e) => setNewMessage(e.target.value)}
-                        onKeyPress={handleKeyPress}
-                        placeholder="Type a message..."
-                        className="flex-1 bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-purple-400"
-                      />
-                      <button
-                        onClick={sendMessage}
-                        disabled={!newMessage.trim()}
-                        className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-3 py-2 rounded-lg text-sm hover:from-purple-600 hover:to-pink-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                      >
-                        Send
-                      </button>
-                    </div>
+                </div>
+                
+                {/* Message Input */}
+                <div className="bg-white/5 rounded-xl p-3 border border-white/10">
+                  <div className="flex space-x-2">
+                    <input
+                      type="text"
+                      value={newMessage}
+                      onChange={(e) => setNewMessage(e.target.value)}
+                      onKeyPress={handleKeyPress}
+                      placeholder="Type a message..."
+                      className="flex-1 bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-purple-400"
+                    />
+                    <button
+                      onClick={sendMessage}
+                      disabled={!newMessage.trim()}
+                      className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-3 py-2 rounded-lg text-sm hover:from-purple-600 hover:to-pink-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                    >
+                      Send
+                    </button>
                   </div>
                 </div>
               </div>
@@ -611,8 +648,15 @@ const MeetingRoom = ({ user }) => {
           {/* Participants */}
           <div className="flex flex-col items-center">
             <button
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="p-4 rounded-2xl bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 shadow-lg transition-all duration-200 transform hover:scale-110"
+              onClick={() => {
+                setParticipantsSidebarOpen(!participantsSidebarOpen);
+                setChatSidebarOpen(false); // Close chat sidebar if open
+              }}
+              className={`p-4 rounded-2xl shadow-lg transition-all duration-200 transform hover:scale-110 ${
+                participantsSidebarOpen 
+                  ? 'bg-gradient-to-r from-blue-500 to-blue-600' 
+                  : 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600'
+              }`}
             >
               <Users className="w-6 h-6 text-white" />
             </button>
@@ -623,10 +667,22 @@ const MeetingRoom = ({ user }) => {
 
           {/* Chat */}
           <div className="flex flex-col items-center">
-            <button className="p-4 rounded-2xl bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-500 hover:to-purple-600 shadow-lg transition-all duration-200 transform hover:scale-110">
+            <button 
+              onClick={() => {
+                setChatSidebarOpen(!chatSidebarOpen);
+                setParticipantsSidebarOpen(false); // Close participants sidebar if open
+              }}
+              className={`p-4 rounded-2xl shadow-lg transition-all duration-200 transform hover:scale-110 ${
+                chatSidebarOpen 
+                  ? 'bg-gradient-to-r from-purple-500 to-purple-600' 
+                  : 'bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-500 hover:to-purple-600'
+              }`}
+            >
               <MessageSquare className="w-6 h-6 text-white" />
             </button>
-            <span className="text-xs text-gray-300 mt-2 font-medium">Chat</span>
+            <span className="text-xs text-gray-300 mt-2 font-medium">
+              Chat {messages.length > 0 && `(${messages.length})`}
+            </span>
           </div>
 
           {/* Leave Meeting */}

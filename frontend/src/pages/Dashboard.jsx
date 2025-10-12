@@ -16,15 +16,23 @@ const Dashboard = ({ user }) => {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   // Handle successful meeting creation
-  const handleMeetingCreated = (meeting) => {
-    alert(`Meeting created successfully!\nMeeting ID: ${meeting.meetingId}`);
-    setRefreshTrigger(prev => prev + 1); // Trigger refresh of meeting list
-    setSearchParams({ tab: 'meetings' }); // Switch to meetings tab
+  const handleMeetingCreated = (meeting, displayName) => {
+    // Navigate to the meeting room with display name if provided
+    if (displayName && displayName !== user.username) {
+      navigate(`/meeting/${meeting.meetingId}?displayName=${encodeURIComponent(displayName)}`);
+    } else {
+      navigate(`/meeting/${meeting.meetingId}`);
+    }
   };
 
   // Handle successful meeting join
-  const handleMeetingJoined = (meeting) => {
-    navigate(`/meeting/${meeting.meetingId}`);
+  const handleMeetingJoined = (meeting, displayName) => {
+    // If a custom display name is provided, pass it as a query parameter
+    if (displayName && displayName !== user.username) {
+      navigate(`/meeting/${meeting.meetingId}?displayName=${encodeURIComponent(displayName)}`);
+    } else {
+      navigate(`/meeting/${meeting.meetingId}`);
+    }
   };
 
   // Handle join from meeting list

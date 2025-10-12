@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Calendar, Clock, Users, Settings, Plus } from 'lucide-react';
+import { Calendar, Clock, Users, Settings, Plus, User } from 'lucide-react';
 import MeetingService from '../services/meetingService';
 
 /**
@@ -21,6 +21,8 @@ const CreateMeeting = ({ onMeetingCreated, user }) => {
       allowWhiteboard: true
     }
   });
+  
+  const [displayName, setDisplayName] = useState(user?.username || '');
   
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -62,7 +64,7 @@ const CreateMeeting = ({ onMeetingCreated, user }) => {
       const result = await MeetingService.createMeeting(meetingData);
       
       if (result.success) {
-        onMeetingCreated?.(result.meeting);
+        onMeetingCreated?.(result.meeting, displayName.trim());
         // Reset form
         setFormData({
           title: '',
@@ -95,6 +97,22 @@ const CreateMeeting = ({ onMeetingCreated, user }) => {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-4 pb-4">
+        {/* Host Display Name */}
+        <div>
+          <label className="block text-sm font-medium text-white/90 mb-2">
+            <User className="w-4 h-4 inline mr-1 text-blue-400" />
+            Your Display Name *
+          </label>
+          <input
+            type="text"
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+            required
+            className="w-full px-3 py-2 bg-white/10 backdrop-blur-lg border border-white/20 rounded-lg shadow-lg text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-all duration-200"
+            placeholder="Enter your name for this meeting..."
+          />
+        </div>
+
         {/* Meeting Title */}
         <div>
           <label className="block text-sm font-medium text-white/90 mb-2">

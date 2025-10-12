@@ -20,7 +20,7 @@ const meetingSocket = (io) => {
     //🏠 4️⃣ Joining a Meeting Room
     socket.on("join-meeting", async (data) => {
       try {
-        const { meetingId, userId } = data;
+        const { meetingId, userId, displayName } = data;
         
         // Validate meeting exists and is active
         const meeting = await Meeting.findOne({ meetingId, isActive: true });
@@ -54,37 +54,52 @@ const meetingSocket = (io) => {
         socket.join(roomId);
         
         // Store user-meeting association
-        userMeetings[socket.id] = { userId, meetingId, roomId };
+        userMeetings[socket.id] = { userId, meetingId, roomId, displayName };
 
-        // Update current participants in database
-        const existingParticipant = meeting.currentParticipants.find(
-          p => p.userId.toString() === userId
-        );
-
-        if (!existingParticipant) {
-          meeting.currentParticipants.push({
-            userId,
-            socketId: socket.id,
-            joinedAt: new Date(),
-            isHost: meeting.host.toString() === userId
-          });
-          await meeting.save();
-        }
+        // Update current participants in database - always add new entry for each socket connection
+        meeting.currentParticipants.push({
+          userId,
+          socketId: socket.id,
+          displayName: displayName || `User ${userId.slice(-4)}`,
+          joinedAt: new Date(),
+          isHost: meeting.host.toString() === userId
+        });
+        await meeting.save();
 
         const otherUsers = users[roomId].filter((id) => id !== socket.id);
+
+        // Get existing participants info
+        const existingParticipants = otherUsers.map(socketId => {
+          const userSession = userMeetings[socketId];
+          if (userSession) {
+            return {
+              socketId,
+              userId: userSession.userId,
+              displayName: userSession.displayName || `User ${userSession.userId.slice(-4)}`
+            };
+          }
+          return null;
+        }).filter(Boolean);
 
         // Notify new user about existing peers
         socket.emit("meeting-joined", { 
           meetingId,
           otherUsers,
+          existingParticipants,
           meetingSettings: meeting.meetingSettings,
           isHost: meeting.host.toString() === userId
+        });
+
+        // Emit user-joined events for existing participants to the new user
+        existingParticipants.forEach(participant => {
+          socket.emit("user-joined", participant);
         });
 
         // Notify existing users that a new user joined
         socket.to(roomId).emit("user-joined", {
           socketId: socket.id,
-          userId
+          userId,
+          displayName: displayName || `User ${userId.slice(-4)}`
         });
 
         console.log(`👥 User ${userId} joined meeting ${meetingId} (room: ${roomId})`);

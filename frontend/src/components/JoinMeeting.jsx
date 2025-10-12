@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { LogIn, Hash } from 'lucide-react';
+import { LogIn, Hash, User } from 'lucide-react';
 import MeetingService from '../services/meetingService';
 
 /**
@@ -8,6 +8,7 @@ import MeetingService from '../services/meetingService';
  */
 const JoinMeeting = ({ onMeetingJoined, user }) => {
   const [meetingId, setMeetingId] = useState('');
+  const [displayName, setDisplayName] = useState(user?.username || '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -20,6 +21,11 @@ const JoinMeeting = ({ onMeetingJoined, user }) => {
       return;
     }
 
+    if (!displayName.trim()) {
+      setError('Please enter your display name');
+      return;
+    }
+
     setLoading(true);
     setError('');
 
@@ -27,8 +33,10 @@ const JoinMeeting = ({ onMeetingJoined, user }) => {
       const result = await MeetingService.joinMeeting(meetingId.trim(), user.id);
       
       if (result.success) {
-        onMeetingJoined?.(result.meeting);
+        // Pass the meeting data along with the custom display name
+        onMeetingJoined?.(result.meeting, displayName.trim());
         setMeetingId('');
+        setDisplayName(user?.username || ''); // Reset to default
       }
     } catch (err) {
       setError(err.message);
@@ -46,6 +54,24 @@ const JoinMeeting = ({ onMeetingJoined, user }) => {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-6 pb-4">
+        <div>
+          <label className="block text-sm font-medium text-white/90 mb-3">
+            <User className="w-4 h-4 inline mr-2 text-blue-400" />
+            Display Name *
+          </label>
+          <input
+            type="text"
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+            required
+            className="w-full px-4 py-4 bg-white/10 backdrop-blur-lg border border-white/20 rounded-xl shadow-lg text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-all duration-200 text-center"
+            placeholder="Enter your name for this meeting..."
+          />
+          <p className="text-sm text-white/60 mt-2 text-center">
+            👋 This is how others will see you in the meeting
+          </p>
+        </div>
+
         <div>
           <label className="block text-sm font-medium text-white/90 mb-3">
             <Hash className="w-4 h-4 inline mr-2 text-pink-400" />

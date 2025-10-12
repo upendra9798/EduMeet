@@ -104,8 +104,9 @@ class MeetingSocket {
   /**
    * Join a meeting room
    * @param {string} meetingId - Meeting ID to join
+   * @param {string} displayName - Display name for this session (optional)
    */
-  joinMeeting(meetingId) {
+  joinMeeting(meetingId, displayName) {
     if (!this.isConnected) {
       throw new Error('Socket not connected');
     }
@@ -113,7 +114,8 @@ class MeetingSocket {
     this.meetingId = meetingId;
     this.socket.emit('join-meeting', {
       meetingId,
-      userId: this.userId
+      userId: this.userId,
+      displayName: displayName || null
     });
   }
 
