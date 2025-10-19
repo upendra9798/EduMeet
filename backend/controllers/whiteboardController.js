@@ -11,30 +11,39 @@ import { v4 as uuidv4 } from 'uuid';
 export const createWhiteboard = async (req, res) => {
     try {
         const { meetingId, title, canvasWidth, canvasHeight, backgroundColor } = req.body;
-        const userId = req.user.id;
+        const userId = req.user?.id || req.body.userId; // Support demo mode
+
+        console.log('Creating whiteboard for meetingId:', meetingId, 'userId:', userId);
 
         // Check if meeting exists and user has permission
-        const meeting = await Meeting.findOne({ meetingId }).populate('host');
+        const meeting = await Meeting.findOne({ meetingId });
         if (!meeting) {
+            console.log('Meeting not found:', meetingId);
             return res.status(404).json({ message: 'Meeting not found' });
         }
 
+        console.log('Found meeting:', meeting.meetingId, 'host:', meeting.host);
+
         // Check if user is host or admin
-        if (meeting.host._id.toString() !== userId && !meeting.participants.includes(userId)) {
+        if (meeting.host !== userId && !meeting.participants.includes(userId)) {
+            console.log('Access denied for user:', userId, 'meeting host:', meeting.host);
             return res.status(403).json({ message: 'Access denied' });
         }
 
         // Check if whiteboard already exists for this meeting
         const existingWhiteboard = await Whiteboard.findOne({ meetingId, isActive: true });
         if (existingWhiteboard) {
-            return res.status(400).json({ 
+            console.log('Whiteboard already exists:', existingWhiteboard.whiteboardId);
+            return res.status(200).json({ 
                 message: 'Whiteboard already exists for this meeting',
                 whiteboard: existingWhiteboard
             });
         }
 
         // Create new whiteboard
-        const whiteboardId = `wb_${meetingId}_${uuidv4()}`;
+        const whiteboardId = `wb_${meetingId}`;
+        console.log('Creating new whiteboard:', whiteboardId);
+        
         const whiteboard = new Whiteboard({
             whiteboardId,
             meetingId,
@@ -45,7 +54,8 @@ export const createWhiteboard = async (req, res) => {
             backgroundColor: backgroundColor || '#ffffff',
             permissions: {
                 allowedDrawers: [userId],
-                restrictToHost: meeting.host._id.toString() === userId
+                restrictToHost: meeting.host === userId,
+                publicDrawing: false // Only host can draw by default
             },
             lastModified: {
                 timestamp: new Date(),
@@ -54,10 +64,12 @@ export const createWhiteboard = async (req, res) => {
         });
 
         await whiteboard.save();
+        console.log('Whiteboard saved successfully:', whiteboard.whiteboardId);
 
         // Create associated session
         const sessionId = `session_${whiteboardId}`;
         const session = await WhiteboardSessionService.createSession(sessionId, whiteboardId);
+        console.log('Session created:', sessionId);
 
         res.status(201).json({
             message: 'Whiteboard created successfully',
@@ -261,8 +273,8 @@ export const getSnapshots = async (req, res) => {
         const { limit = 10 } = req.query;
 
         // Find whiteboard
-        const whiteboard = await Whiteboard.findOne({ whiteboardId, isActive: true })
-            .populate('snapshots.createdBy', 'name email');
+        const whiteboard = await Whiteboard.findOne({ whiteboardId, isActive: true });
+        // Removed .populate() since we're using string userIds in demo mode
         
         if (!whiteboard) {
             return res.status(404).json({ message: 'Whiteboard not found' });
@@ -364,8 +376,8 @@ export const getCollaborationHistory = async (req, res) => {
         const { limit = 50, page = 1 } = req.query;
 
         // Find whiteboard
-        const whiteboard = await Whiteboard.findOne({ whiteboardId, isActive: true })
-            .populate('collaborationHistory.performedBy', 'name email');
+        const whiteboard = await Whiteboard.findOne({ whiteboardId, isActive: true });
+        // Removed .populate() since we're using string userIds in demo mode
         
         if (!whiteboard) {
             return res.status(404).json({ message: 'Whiteboard not found' });

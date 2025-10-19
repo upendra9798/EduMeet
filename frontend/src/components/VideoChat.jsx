@@ -7,7 +7,7 @@ import { v4 as uuidv4 } from "uuid";
  * Handles video streaming for existing meeting rooms.
  * Uses Socket.IO for signaling (offer/answer/ICE exchange).
  */
-export default function VideoChat({ meetingId, userId, localStream }) {
+export default function VideoChat({ meetingId, userId, localStream, isMuted, isVideoOff }) {
   const [joined, setJoined] = useState(false);
   const localVideoRef = useRef(null);
   const localStreamRef = useRef(null);
@@ -22,12 +22,30 @@ export default function VideoChat({ meetingId, userId, localStream }) {
 
   /** 🎥 Set up local video stream */
   useEffect(() => {
+    console.log('VideoChat: Stream effect triggered', { localStream: !!localStream, videoRef: !!localVideoRef.current });
     if (localStream && localVideoRef.current) {
       localVideoRef.current.srcObject = localStream;
       localStreamRef.current = localStream;
-      console.log('VideoChat: Local stream set up');
+      console.log('VideoChat: Local stream assigned to video element');
+      
+      // Ensure video plays
+      localVideoRef.current.play().catch(err => {
+        console.log('VideoChat: Video play failed (this is normal):', err);
+      });
     }
   }, [localStream]);
+
+  /** 🎥 Additional effect to handle video ref changes */
+  useEffect(() => {
+    if (localVideoRef.current && localStreamRef.current) {
+      localVideoRef.current.srcObject = localStreamRef.current;
+      console.log('VideoChat: Re-assigned stream to new video ref');
+      
+      localVideoRef.current.play().catch(err => {
+        console.log('VideoChat: Video play failed on ref change:', err);
+      });
+    }
+  }, [localVideoRef.current]);
 
   const joinMeetingRoom = async () => {
     if (!meetingId) return;
@@ -37,10 +55,14 @@ export default function VideoChat({ meetingId, userId, localStream }) {
 
       // Use the passed localStream instead of creating a new one
       if (localStream) {
+        console.log('VideoChat: Using provided local stream');
         if (localVideoRef.current) {
           localVideoRef.current.srcObject = localStream;
+          console.log('VideoChat: Stream assigned to video element');
         }
         localStreamRef.current = localStream;
+      } else {
+        console.warn('VideoChat: No local stream provided');
       }
 
       // Notify server
@@ -51,6 +73,20 @@ export default function VideoChat({ meetingId, userId, localStream }) {
       setJoined(false);
     }
   };
+
+  // Effect to re-assign stream when video ref changes (component remount)
+  useEffect(() => {
+    const videoElement = localVideoRef.current;
+    if (videoElement && localStreamRef.current) {
+      console.log('VideoChat: Video element ready, assigning stream');
+      videoElement.srcObject = localStreamRef.current;
+      
+      // Auto-play the video
+      videoElement.play().catch(err => {
+        console.log('VideoChat: Auto-play prevented (normal behavior):', err.message);
+      });
+    }
+  }, [localVideoRef.current]);
 
   /** 🔗 WebRTC signaling logic via Socket.IO */
   useEffect(() => {
@@ -162,13 +198,29 @@ export default function VideoChat({ meetingId, userId, localStream }) {
             id="video-grid"
             className="flex flex-wrap justify-center gap-4 h-full items-center"
           >
-            <video
-              ref={localVideoRef}
-              autoPlay
-              muted
-              playsInline
-              className="w-full max-w-md h-64 bg-gray-800 rounded-xl shadow-lg object-cover"
-            />
+            <div className="relative w-full max-w-md h-64 bg-gray-800 rounded-xl shadow-lg overflow-hidden">
+              <video
+                ref={localVideoRef}
+                autoPlay
+                muted
+                playsInline
+                className={`w-full h-full object-cover transition-opacity duration-300 ${
+                  isVideoOff ? 'opacity-0' : 'opacity-100'
+                }`}
+              />
+              {isVideoOff && (
+                <div className="absolute inset-0 flex items-center justify-center bg-gray-800">
+                  <div className="text-center text-white">
+                    <div className="w-16 h-16 bg-gray-600 rounded-full flex items-center justify-center mx-auto mb-3">
+                      <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-6-3a2 2 0 11-4 0 2 2 0 014 0zm-2 4a5 5 0 00-4.546 2.916A5.986 5.986 0 0010 16a5.986 5.986 0 004.546-2.084A5 5 0 0010 11z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    <p className="text-sm text-gray-300">Camera is off</p>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       ) : (

@@ -9,13 +9,10 @@ const api = axios.create({
   },
 });
 
-// Request interceptor to add auth token if available
+// Request interceptor - no authentication needed for demo
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('authToken');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
+    // Demo mode - no authentication tokens needed
     return config;
   },
   (error) => {
@@ -23,17 +20,14 @@ api.interceptors.request.use(
   }
 );
 
-// Response interceptor to handle common errors
+// Response interceptor to handle common errors  
 api.interceptors.response.use(
   (response) => {
     return response;
   },
   (error) => {
-    if (error.response?.status === 401) {
-      // Handle unauthorized access
-      localStorage.removeItem('authToken');
-      window.location.href = '/login';
-    }
+    // Log error for debugging
+    console.error('API Error:', error);
     return Promise.reject(error);
   }
 );

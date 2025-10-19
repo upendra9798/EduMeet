@@ -5,7 +5,7 @@ import WhiteboardService from '../services/whiteboardService.js';
 import WhiteboardSessionService from '../services/whiteboardSessionService.js';
 
 // Real-time whiteboard socket handler
-export const whiteboardSocketHandler = (io) => {
+const whiteboardSocketHandler = (io) => {
     // Namespace for whiteboard events
     const whiteboardNamespace = io.of('/whiteboard');
 
@@ -23,16 +23,36 @@ export const whiteboardSocketHandler = (io) => {
                 userId = userIdParam;
                 currentWhiteboardId = whiteboardId;
 
+                console.log(`Whiteboard join attempt: ${whiteboardId}, user: ${userId}, meeting: ${meetingId}`);
+
                 // Validate whiteboard exists
                 const whiteboard = await Whiteboard.findOne({ whiteboardId, isActive: true });
                 if (!whiteboard) {
+                    console.log('Whiteboard not found:', whiteboardId);
                     socket.emit('error', { message: 'Whiteboard not found' });
                     return;
                 }
 
-                // Check user has access to meeting
-                const meeting = await Meeting.findById(whiteboard.meeting);
-                if (!meeting || (!meeting.participants.includes(userId) && meeting.host.toString() !== userId)) {
+                console.log('Found whiteboard:', whiteboard.whiteboardId, 'for meeting:', whiteboard.meetingId);
+
+                // Get meeting by meetingId instead of meeting._id
+                const meeting = await Meeting.findOne({ meetingId: meetingId });
+                if (!meeting) {
+                    console.log('Meeting not found for whiteboard:', meetingId);
+                    socket.emit('error', { message: 'Meeting not found' });
+                    return;
+                }
+
+                console.log('Found meeting:', meeting.meetingId, 'host:', meeting.host);
+
+                // Check user has access to meeting (host or participant)
+                const isHost = meeting.host === userId;
+                const isParticipant = meeting.participants.includes(userId);
+                
+                console.log(`User ${userId} - isHost: ${isHost}, isParticipant: ${isParticipant}`);
+
+                if (!isHost && !isParticipant) {
+                    console.log('Access denied for user:', userId);
                     socket.emit('error', { message: 'Access denied' });
                     return;
                 }
@@ -48,13 +68,21 @@ export const whiteboardSocketHandler = (io) => {
                     session = await WhiteboardSessionService.createSession(sessionId, whiteboardId);
                 }
 
-                // Determine user role
+                // Determine user role and permissions
                 let role = 'participant';
-                if (meeting.host.toString() === userId) {
+                let canDraw = false;
+
+                if (isHost) {
                     role = 'host';
+                    canDraw = true;
                 } else if (whiteboard.permissions.allowedDrawers.includes(userId)) {
                     role = 'admin';
+                    canDraw = true;
+                } else if (whiteboard.permissions.publicDrawing) {
+                    canDraw = true;
                 }
+
+                console.log(`User ${userId} joined as ${role}, canDraw: ${canDraw}`);
 
                 // Add participant to session
                 await WhiteboardSessionService.addParticipant(session.sessionId, userId, socket.id, role);
@@ -65,7 +93,7 @@ export const whiteboardSocketHandler = (io) => {
                     whiteboardId,
                     sessionId: session.sessionId,
                     role,
-                    canDraw: role === 'host' || role === 'admin' || whiteboard.permissions.publicDrawing,
+                    canDraw,
                     permissions: whiteboard.permissions,
                     settings: whiteboard.settings
                 });
@@ -95,7 +123,7 @@ export const whiteboardSocketHandler = (io) => {
                     count: activeParticipants.length
                 });
 
-                console.log(`User ${userId} joined whiteboard ${whiteboardId} as ${role}`);
+                console.log(`User ${userId} successfully joined whiteboard ${whiteboardId} as ${role}`);
 
             } catch (error) {
                 console.error('Error joining whiteboard:', error);

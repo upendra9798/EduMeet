@@ -56,8 +56,7 @@ const drawingElementSchema = new mongoose.Schema({
     },
     // Metadata
     createdBy: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User',
+        type: String, // Changed from ObjectId to String for demo mode
         required: true
     },
     createdAt: {
@@ -129,16 +128,14 @@ const whiteboardSchema = new mongoose.Schema({
             default: Date.now
         },
         createdBy: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: 'User'
+            type: String // Changed from ObjectId to String for demo mode
         }
     }],
     
     // Current active users on the whiteboard
     activeUsers: [{
         userId: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: 'User'
+            type: String // Changed from ObjectId to String for demo mode
         },
         cursor: {
             x: Number,
@@ -158,8 +155,7 @@ const whiteboardSchema = new mongoose.Schema({
     permissions: {
         // Who can draw on the whiteboard
         allowedDrawers: [{
-            type: mongoose.Schema.Types.ObjectId,
-            ref: 'User'
+            type: String // Changed from ObjectId to String for demo mode
         }],
         // Public drawing access
         publicDrawing: {
@@ -234,8 +230,7 @@ const whiteboardSchema = new mongoose.Schema({
             default: Date.now
         },
         modifiedBy: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: 'User'
+            type: String // Changed from ObjectId to String for demo mode
         }
     },
     
@@ -261,8 +256,7 @@ const whiteboardSchema = new mongoose.Schema({
             default: Date.now
         },
         createdBy: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: 'User'
+            type: String // Changed from ObjectId to String for demo mode
         }
     }],
     
@@ -277,8 +271,7 @@ const whiteboardSchema = new mongoose.Schema({
             type: String
         },
         performedBy: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: 'User',
+            type: String, // Changed from ObjectId to String for demo mode
             required: true
         },
         timestamp: {

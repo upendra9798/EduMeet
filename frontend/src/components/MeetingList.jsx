@@ -147,7 +147,23 @@ const MeetingList = ({ userId, onJoinMeeting }) => {
                 <div className="flex items-center space-x-2">
                   {/* Join Meeting Button */}
                   <button
-                    onClick={() => onJoinMeeting?.(meeting)}
+                    onClick={(e) => {
+                      console.log('MeetingList: Join button clicked for meeting:', meeting);
+                      console.log('MeetingList: Event object:', e);
+                      
+                      // Prevent any default behavior and stop propagation
+                      e.preventDefault();
+                      e.stopPropagation();
+                      
+                      console.log('MeetingList: onJoinMeeting function:', onJoinMeeting);
+                      
+                      try {
+                        onJoinMeeting?.(meeting);
+                        console.log('MeetingList: onJoinMeeting call completed');
+                      } catch (error) {
+                        console.error('MeetingList: Error in onJoinMeeting call:', error);
+                      }
+                    }}
                     className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 flex items-center"
                   >
                     <Video className="w-4 h-4 mr-1" />

@@ -17,11 +17,28 @@ const Dashboard = ({ user }) => {
 
   // Handle successful meeting creation
   const handleMeetingCreated = (meeting, displayName) => {
-    // Navigate to the meeting room with display name if provided
-    if (displayName && displayName !== user.username) {
-      navigate(`/meeting/${meeting.meetingId}?displayName=${encodeURIComponent(displayName)}`);
-    } else {
-      navigate(`/meeting/${meeting.meetingId}`);
+    console.log('Dashboard: handleMeetingCreated called with:', meeting, displayName);
+    
+    try {
+      // Validate meeting object
+      if (!meeting || !meeting.meetingId) {
+        console.error('Invalid meeting object:', meeting);
+        return;
+      }
+      
+      // Navigate to the meeting room with display name if provided
+      if (displayName && displayName !== user.username) {
+        const navigationUrl = `/meeting/${meeting.meetingId}?displayName=${encodeURIComponent(displayName)}`;
+        console.log('Navigating with display name:', navigationUrl);
+        navigate(navigationUrl);
+      } else {
+        const navigationUrl = `/meeting/${meeting.meetingId}`;
+        console.log('Navigating without display name:', navigationUrl);
+        navigate(navigationUrl);
+      }
+      console.log('Navigation completed successfully');
+    } catch (navigationError) {
+      console.error('Error during navigation:', navigationError);
     }
   };
 
@@ -37,7 +54,26 @@ const Dashboard = ({ user }) => {
 
   // Handle join from meeting list
   const handleJoinFromList = (meeting) => {
-    navigate(`/meeting/${meeting.meetingId}`);
+    console.log('Dashboard: handleJoinFromList called with meeting:', meeting);
+    
+    try {
+      if (!meeting || !meeting.meetingId) {
+        console.error('Invalid meeting object in handleJoinFromList:', meeting);
+        alert('Invalid meeting data');
+        return;
+      }
+      
+      const navigationUrl = `/meeting/${meeting.meetingId}`;
+      console.log('Dashboard: About to navigate to:', navigationUrl);
+      
+      // Use React Router navigate
+      navigate(navigationUrl, { replace: false });
+      console.log('Dashboard: React Router navigate called');
+      
+    } catch (error) {
+      console.error('Error in handleJoinFromList:', error);
+      alert('Error in navigation: ' + error.message);
+    }
   };
 
   const tabs = [

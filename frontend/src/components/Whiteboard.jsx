@@ -2,7 +2,7 @@ import React, { useRef, useEffect, useState } from "react";
 import io from "socket.io-client";
 
 // ✅ Whiteboard Component — shared interactive canvas for meetings
-const Whiteboard = ({ meetingId, isAdmin, userId }) => {
+const Whiteboard = ({ meetingId, userId }) => {
   // References for canvas and its context (for drawing)
   const canvasRef = useRef(null);
   const contextRef = useRef(null);
@@ -13,6 +13,8 @@ const Whiteboard = ({ meetingId, isAdmin, userId }) => {
   const [color, setColor] = useState("#000000");
   const [brushSize, setBrushSize] = useState(3);
   const [socket, setSocket] = useState(null);
+  const [canDraw, setCanDraw] = useState(false);
+  const [remoteDrawers, setRemoteDrawers] = useState({}); // Track remote users drawing
 
   // History (Undo/Redo) management
   const [history, setHistory] = useState([]);
@@ -22,32 +24,70 @@ const Whiteboard = ({ meetingId, isAdmin, userId }) => {
      1️⃣ Setup Socket.io connection and event listeners
   ------------------------------------------------------------------ */
   useEffect(() => {
-    // Connect to backend socket server
-    const newSocket = io("http://localhost:5001");
+    // Connect to whiteboard namespace
+    const newSocket = io("http://localhost:5001/whiteboard");
     setSocket(newSocket);
 
-    // Join meeting-specific whiteboard room
-    newSocket.emit("join-whiteboard", { meetingId, userId, isAdmin });
+    // Generate whiteboard ID from meeting
+    const whiteboardId = `wb_${meetingId}`;
 
-    // Listen for drawing updates from others
-    newSocket.on("drawing-event", (data) => {
-      if (data.userId !== userId) {
-        drawFromServer(data);
+    // Join whiteboard room
+    newSocket.emit("join-whiteboard", { 
+      whiteboardId, 
+      userId, 
+      meetingId 
+    });
+
+    // Listen for successful join
+    newSocket.on("joined-whiteboard", (data) => {
+      console.log("Joined whiteboard:", data);
+      // Save canvas permissions
+      setCanDraw(data.canDraw);
+    });
+
+    // Listen for whiteboard state (initial load)
+    newSocket.on("whiteboard-state", (data) => {
+      if (data.elements && data.elements.length > 0) {
+        loadWhiteboardElements(data.elements);
       }
     });
 
-    // Listen for clear events
-    newSocket.on("canvas-cleared", () => {
+    // Listen for real-time drawing events
+    newSocket.on("drawing-start", (data) => {
+      if (data.userId !== userId) {
+        handleRemoteDrawingStart(data);
+      }
+    });
+
+    newSocket.on("drawing", (data) => {
+      if (data.userId !== userId) {
+        handleRemoteDrawing(data);
+      }
+    });
+
+    newSocket.on("drawing-end", (data) => {
+      if (data.userId !== userId) {
+        handleRemoteDrawingEnd(data);
+      }
+    });
+
+    // Listen for canvas clear events
+    newSocket.on("canvas-cleared", (data) => {
       clearCanvas(false);
     });
 
-    // Listen for complete canvas updates (undo/redo sync)
-    newSocket.on("canvas-state", (imageData) => {
-      loadCanvasState(imageData);
+    // Listen for new elements added
+    newSocket.on("element-added", (data) => {
+      console.log("New element added:", data);
+    });
+
+    // Listen for errors
+    newSocket.on("error", (data) => {
+      console.error("Whiteboard error:", data.message);
     });
 
     return () => newSocket.disconnect();
-  }, [meetingId, userId, isAdmin]);
+  }, [meetingId, userId]);
 
   /* ------------------------------------------------------------------
      2️⃣ Setup Canvas size and initial context
@@ -72,30 +112,32 @@ const Whiteboard = ({ meetingId, isAdmin, userId }) => {
   }, []);
 
   /* ------------------------------------------------------------------
-     3️⃣ Drawing Event Handlers (for Admin)
+     3️⃣ Drawing Event Handlers (with proper permissions)
   ------------------------------------------------------------------ */
   const startDrawing = (e) => {
-    if (!isAdmin) return;
+    if (!canDraw) {
+      console.log("Drawing not allowed for this user");
+      return;
+    }
 
     const { offsetX, offsetY } = e.nativeEvent;
     contextRef.current.beginPath();
     contextRef.current.moveTo(offsetX, offsetY);
     setIsDrawing(true);
 
-    // Notify others about start
+    // Notify others about drawing start
     socket?.emit("drawing-start", { 
-      meetingId,
-      userId,
       x: offsetX,
       y: offsetY,
       tool,
       color,
       brushSize,
+      timestamp: Date.now()
     });
   };
 
   const draw = (e) => {
-    if (!isDrawing || !isAdmin) return;
+    if (!isDrawing || !canDraw) return;
     const { offsetX, offsetY } = e.nativeEvent;
 
     if (tool === "pen") {
@@ -111,66 +153,124 @@ const Whiteboard = ({ meetingId, isAdmin, userId }) => {
       contextRef.current.fill();
     }
 
-    // Emit draw event
+    // Emit drawing data
     socket?.emit("drawing", {
-      meetingId,
-      userId,
       x: offsetX,
       y: offsetY,
       tool,
       color,
       brushSize,
+      timestamp: Date.now()
     });
   };
 
   const stopDrawing = () => {
-    if (!isDrawing || !isAdmin) return;
+    if (!isDrawing || !canDraw) return;
 
     contextRef.current.closePath();
     setIsDrawing(false);
     saveCanvasState();
 
-    // Notify stop
-    socket?.emit("drawing-end", { meetingId, userId });
+    // Create element data for the completed drawing
+    const canvas = canvasRef.current;
+    const elementData = {
+      type: 'drawing',
+      tool,
+      color,
+      brushSize,
+      timestamp: Date.now(),
+      // Could add path data here for vector storage
+    };
+
+    // Notify drawing end with element data
+    socket?.emit("drawing-end", { 
+      elementData,
+      timestamp: Date.now()
+    });
   };
 
   /* ------------------------------------------------------------------
-     4️⃣ Draw updates from server (other users)
+     4️⃣ Remote drawing handlers (from other users)
   ------------------------------------------------------------------ */
-  const drawFromServer = (data) => {
+  const handleRemoteDrawingStart = (data) => {
     const ctx = contextRef.current;
+    const { userId: remoteUserId, x, y, tool, color, brushSize } = data;
+    
+    // Store remote drawer state
+    setRemoteDrawers(prev => ({
+      ...prev,
+      [remoteUserId]: { x, y, tool, color, brushSize, isDrawing: true }
+    }));
 
-    if (data.type === "start") {
+    // Start path for remote user
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+  };
+
+  const handleRemoteDrawing = (data) => {
+    const ctx = contextRef.current;
+    const { userId: remoteUserId, x, y, tool, color, brushSize } = data;
+    
+    const remoteDrawer = remoteDrawers[remoteUserId];
+    if (!remoteDrawer || !remoteDrawer.isDrawing) return;
+
+    if (tool === "pen") {
+      ctx.globalCompositeOperation = "source-over";
+      ctx.strokeStyle = color;
+      ctx.lineWidth = brushSize;
+      ctx.lineTo(x, y);
+      ctx.stroke();
+    } else if (tool === "eraser") {
+      ctx.globalCompositeOperation = "destination-out";
       ctx.beginPath();
-      ctx.moveTo(data.x, data.y);
-    } else if (data.type === "draw") {
-      if (data.tool === "pen") {
-        ctx.globalCompositeOperation = "source-over";
-        ctx.strokeStyle = data.color;
-        ctx.lineWidth = data.brushSize;
-        ctx.lineTo(data.x, data.y);
-        ctx.stroke();
-      } else if (data.tool === "eraser") {
-        ctx.globalCompositeOperation = "destination-out";
-        ctx.beginPath();
-        ctx.arc(data.x, data.y, data.brushSize, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    } else if (data.type === "end") {
-      ctx.closePath();
+      ctx.arc(x, y, brushSize, 0, Math.PI * 2);
+      ctx.fill();
     }
+
+    // Update remote drawer position
+    setRemoteDrawers(prev => ({
+      ...prev,
+      [remoteUserId]: { ...prev[remoteUserId], x, y }
+    }));
+  };
+
+  const handleRemoteDrawingEnd = (data) => {
+    const ctx = contextRef.current;
+    const { userId: remoteUserId } = data;
+    
+    // End path for remote user
+    ctx.closePath();
+    ctx.restore();
+    
+    // Remove remote drawer
+    setRemoteDrawers(prev => {
+      const newDrawers = { ...prev };
+      delete newDrawers[remoteUserId];
+      return newDrawers;
+    });
+  };
+
+  const loadWhiteboardElements = (elements) => {
+    // Load existing whiteboard elements when joining
+    console.log("Loading whiteboard elements:", elements);
+    // Implementation depends on how elements are stored
+    // For now, this could reconstruct the canvas from stored paths
   };
 
   /* ------------------------------------------------------------------
      5️⃣ Canvas Utilities (Undo, Redo, Clear, Save)
   ------------------------------------------------------------------ */
   const clearCanvas = (emit = true) => {
-    if (!isAdmin && emit) return;
+    if (!canDraw && emit) {
+      console.log("Clear not allowed for this user");
+      return;
+    }
 
     const canvas = canvasRef.current;
     contextRef.current.clearRect(0, 0, canvas.width, canvas.height);
 
-    if (emit) socket?.emit("clear-canvas", { meetingId, userId });
+    if (emit) socket?.emit("clear-canvas", {});
 
     setHistory([]);
     setHistoryStep(-1);
@@ -193,19 +293,19 @@ const Whiteboard = ({ meetingId, isAdmin, userId }) => {
   };
 
   const undo = () => {
-    if (!isAdmin || historyStep <= 0) return;
+    if (!canDraw || historyStep <= 0) return;
     const prev = history[historyStep - 1];
     setHistoryStep(historyStep - 1);
     loadCanvasState(prev);
-    socket?.emit("canvas-update", { meetingId, userId, imageData: prev });
+    socket?.emit("canvas-action", { action: "undo", imageData: prev });
   };
 
   const redo = () => {
-    if (!isAdmin || historyStep >= history.length - 1) return;
+    if (!canDraw || historyStep >= history.length - 1) return;
     const next = history[historyStep + 1];
     setHistoryStep(historyStep + 1);
     loadCanvasState(next);
-    socket?.emit("canvas-update", { meetingId, userId, imageData: next });
+    socket?.emit("canvas-action", { action: "redo", imageData: next });
   };
 
   const downloadCanvas = () => {
@@ -221,8 +321,17 @@ const Whiteboard = ({ meetingId, isAdmin, userId }) => {
   ------------------------------------------------------------------ */
   return (
     <div className="w-full h-full flex flex-col items-center justify-center bg-gray-100 p-4">
-      {/* Toolbar (only for admin) */}
-      {isAdmin && (
+      {/* Permission Status */}
+      <div className="mb-2 text-sm">
+        {canDraw ? (
+          <span className="text-green-600 font-medium">✓ You can draw on this whiteboard</span>
+        ) : (
+          <span className="text-gray-600">👁️ View-only mode (only host can draw)</span>
+        )}
+      </div>
+
+      {/* Toolbar (only for users who can draw) */}
+      {canDraw && (
         <div className="flex flex-wrap items-center justify-between bg-white p-3 rounded-xl shadow-md mb-4 w-full max-w-4xl">
           {/* Tool Selector */}
           <div className="flex items-center space-x-2">
@@ -312,9 +421,9 @@ const Whiteboard = ({ meetingId, isAdmin, userId }) => {
           onMouseUp={stopDrawing}
           onMouseLeave={stopDrawing}
         />
-        {!isAdmin && (
-          <div className="absolute inset-0 flex items-center justify-center bg-white/70 text-gray-600 font-medium text-lg">
-            View Only Mode — Only Admin Can Draw ✋
+        {!canDraw && (
+          <div className="absolute inset-0 flex items-center justify-center bg-white/70 text-gray-600 font-medium text-lg pointer-events-none">
+            View Only Mode — Only Host Can Draw ✋
           </div>
         )}
       </div>

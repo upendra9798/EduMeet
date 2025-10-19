@@ -12,10 +12,19 @@ import ChatTest from './components/ChatTest';
  */
 function App() {
   // Global state (in a real app, use Context API or Redux)
-  const [user, setUser] = useState({
-    id: 'demo-user-' + Math.random().toString(36).substr(2, 9),
-    username: 'Demo User',
-    email: 'demo@edumeet.com'
+  const [user, setUser] = useState(() => {
+    // Get or create persistent user ID
+    let userId = localStorage.getItem('demoUserId');
+    if (!userId) {
+      userId = 'demo-user-' + Math.random().toString(36).substr(2, 9);
+      localStorage.setItem('demoUserId', userId);
+    }
+    
+    return {
+      id: userId,
+      username: 'Demo User',
+      email: 'demo@edumeet.com'
+    };
   });
 
   return (

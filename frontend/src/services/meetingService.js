@@ -12,9 +12,18 @@ class MeetingService {
    */
   async createMeeting(meetingData) {
     try {
+      console.log('MeetingService: Sending API request with data:', meetingData);
+      console.log('MeetingService: API base URL:', import.meta.env.VITE_API_URL || 'http://localhost:5001/api');
       const response = await api.post('/meetings/create', meetingData);
+      console.log('MeetingService: Received API response:', response);
+      console.log('MeetingService: Response status:', response.status);
+      console.log('MeetingService: Response data:', response.data);
       return response.data;
     } catch (error) {
+      console.error('MeetingService: API error:', error);
+      console.error('MeetingService: Error response status:', error.response?.status);
+      console.error('MeetingService: Error response data:', error.response?.data);
+      console.error('MeetingService: Error message:', error.message);
       throw new Error(error.response?.data?.message || 'Failed to create meeting');
     }
   }
@@ -41,9 +50,16 @@ class MeetingService {
    */
   async getMeeting(meetingId) {
     try {
+      console.log('MeetingService: getMeeting called with meetingId:', meetingId);
       const response = await api.get(`/meetings/${meetingId}`);
+      console.log('MeetingService: getMeeting response status:', response.status);
+      console.log('MeetingService: getMeeting response data:', response.data);
       return response.data;
     } catch (error) {
+      console.error('MeetingService: getMeeting error:', error);
+      console.error('MeetingService: Error response status:', error.response?.status);
+      console.error('MeetingService: Error response data:', error.response?.data);
+      console.error('MeetingService: Error message:', error.message);
       throw new Error(error.response?.data?.message || 'Failed to get meeting details');
     }
   }

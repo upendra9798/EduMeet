@@ -149,10 +149,8 @@ class WhiteboardService {
     static async findByMeeting(meetingId) {
         try {
             return await Whiteboard.findOne({ meetingId, isActive: true })
-                .populate('meeting')
-                .populate('elements.createdBy', 'name email')
-                .populate('activeUsers.userId', 'name email')
-                .populate('permissions.allowedDrawers', 'name email');
+                .populate('meeting');
+                // Removed user populates since we're using string userIds in demo mode
         } catch (error) {
             throw new Error(`Failed to find whiteboard by meeting: ${error.message}`);
         }
@@ -275,9 +273,8 @@ class WhiteboardService {
     // Get whiteboard statistics
     static async getStatistics(whiteboardId) {
         try {
-            const whiteboard = await Whiteboard.findOne({ whiteboardId, isActive: true })
-                .populate('elements.createdBy', 'name')
-                .populate('collaborationHistory.performedBy', 'name');
+            const whiteboard = await Whiteboard.findOne({ whiteboardId, isActive: true });
+            // Removed .populate() since we're using string userIds in demo mode
             
             if (!whiteboard) {
                 throw new Error('Whiteboard not found');

@@ -61,10 +61,22 @@ const CreateMeeting = ({ onMeetingCreated, user }) => {
         hostId: user.id
       };
 
+      console.log('Creating meeting with data:', meetingData);
+      console.log('User object:', user);
+
       const result = await MeetingService.createMeeting(meetingData);
       
+      console.log('Meeting creation result:', result);
+      
       if (result.success) {
-        onMeetingCreated?.(result.meeting, displayName.trim());
+        console.log('Meeting created successfully, calling onMeetingCreated with:', result.meeting, displayName.trim());
+        try {
+          onMeetingCreated?.(result.meeting, displayName.trim());
+          console.log('onMeetingCreated callback completed successfully');
+        } catch (callbackError) {
+          console.error('Error in onMeetingCreated callback:', callbackError);
+        }
+        
         // Reset form
         setFormData({
           title: '',
@@ -80,6 +92,10 @@ const CreateMeeting = ({ onMeetingCreated, user }) => {
             allowWhiteboard: true
           }
         });
+        console.log('Form reset completed');
+      } else {
+        console.error('Meeting creation failed - result.success is false:', result);
+        setError('Meeting creation failed: ' + (result.message || 'Unknown error'));
       }
     } catch (err) {
       setError(err.message);

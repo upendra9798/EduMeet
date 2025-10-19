@@ -19,8 +19,7 @@ const whiteboardSessionSchema = new mongoose.Schema({
     // Session participants
     participants: [{
         userId: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: 'User',
+            type: String, // Changed from ObjectId to String for demo mode
             required: true
         },
         socketId: {

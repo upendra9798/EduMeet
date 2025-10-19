@@ -15,9 +15,12 @@ export const createMeeting = async (req, res) => {
         
         // Get host ID from authenticated user or request body (fallback for testing)
         const hostId = req.user?.id || req.body.hostId;
+        
+        console.log('Creating meeting:', { title, hostId, body: req.body });
 
         // Generate unique meeting ID using UUID v4
         const meetingId = uuidv4();
+        console.log('Generated meetingId:', meetingId);
 
         // Create new meeting instance with provided or default values
         const meeting = new Meeting({
@@ -38,11 +41,15 @@ export const createMeeting = async (req, res) => {
             }
         });
 
+        console.log('Created meeting object:', meeting);
+        console.log('About to save meeting to database...');
+
         // Save meeting to database
-        await meeting.save();
+        const savedMeeting = await meeting.save();
+        console.log('Meeting saved successfully:', savedMeeting);
 
         // Return success response with meeting details
-        res.status(201).json({
+        const responseData = {
             success: true,
             message: 'Meeting created successfully',
             meeting: {
@@ -54,14 +61,25 @@ export const createMeeting = async (req, res) => {
                 roomType: meeting.roomType,
                 meetingSettings: meeting.meetingSettings
             }
-        });
+        };
+        
+        console.log('Sending response:', responseData);
+        res.status(201).json(responseData);
     } catch (error) {
         // Handle any errors during meeting creation
         console.error('Error creating meeting:', error);
+        console.error('Error stack:', error.stack);
+        console.error('Error name:', error.name);
+        
+        if (error.name === 'ValidationError') {
+            console.error('Validation errors:', error.errors);
+        }
+        
         res.status(500).json({
             success: false,
             message: 'Failed to create meeting',
-            error: error.message
+            error: error.message,
+            details: error.name === 'ValidationError' ? error.errors : undefined
         });
     }
 };
@@ -144,9 +162,11 @@ export const getMeeting = async (req, res) => {
     try {
         // Extract meeting ID from URL parameters
         const { meetingId } = req.params;
+        console.log('getMeeting: Looking for meetingId:', meetingId);
 
         // Find active meeting
         const meeting = await Meeting.findOne({ meetingId, isActive: true });
+        console.log('getMeeting: Database result:', meeting ? 'Meeting found' : 'Meeting not found');
 
         // Validate meeting exists and is active
         if (!meeting) {

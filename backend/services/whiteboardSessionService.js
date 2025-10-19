@@ -161,8 +161,8 @@ class WhiteboardSessionService {
     // Find active session by whiteboard ID
     static async findByWhiteboard(whiteboardId) {
         try {
-            return await WhiteboardSession.findOne({ whiteboardId, isActive: true })
-                .populate('participants.userId', 'name email avatar');
+            return await WhiteboardSession.findOne({ whiteboardId, isActive: true });
+            // Removed .populate() since we're using string userIds in demo mode
         } catch (error) {
             throw new Error(`Failed to find session by whiteboard: ${error.message}`);
         }
@@ -212,8 +212,8 @@ class WhiteboardSessionService {
     // Get session statistics
     static async getSessionStatistics(sessionId) {
         try {
-            const session = await WhiteboardSession.findOne({ sessionId })
-                .populate('participants.userId', 'name email');
+            const session = await WhiteboardSession.findOne({ sessionId });
+            // Removed .populate() since we're using string userIds in demo mode
             
             if (!session) {
                 throw new Error('Session not found');
@@ -291,8 +291,8 @@ class WhiteboardSessionService {
     // Get all active participants in session
     static async getActiveParticipants(sessionId) {
         try {
-            const session = await WhiteboardSession.findOne({ sessionId })
-                .populate('participants.userId', 'name email avatar');
+            const session = await WhiteboardSession.findOne({ sessionId });
+            // Removed .populate() since we're using string userIds in demo mode
             
             if (!session) {
                 throw new Error('Session not found');
