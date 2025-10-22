@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { socket } from "../utils/socket";
+import MeetingSocket from "../services/meetingSocket";
 import { v4 as uuidv4 } from "uuid";
 
 /**
@@ -15,8 +15,11 @@ export default function VideoChat({ meetingId, userId, localStream, isMuted, isV
 
   /** 🚪 Auto-join the meeting room */
   useEffect(() => {
-    if (meetingId && userId && !joined) {
-      joinMeetingRoom();
+    if (meetingId && userId) {
+      console.log('VideoChat: Auto-joining meeting room - meetingId:', meetingId, 'userId:', userId, 'joined:', joined);
+      if (!joined) {
+        joinMeetingRoom();
+      }
     }
   }, [meetingId, userId]);
 
@@ -65,11 +68,11 @@ export default function VideoChat({ meetingId, userId, localStream, isMuted, isV
         console.warn('VideoChat: No local stream provided');
       }
 
-      // Notify server
-      socket.emit("join-room", meetingId);
-      console.log('VideoChat: Joined meeting room', meetingId);
+      // VideoChat doesn't need to join again - the meeting is already joined via MeetingSocket
+      // We just set up WebRTC peer connections based on existing participants
+      console.log('VideoChat: Ready for WebRTC connections in meeting', meetingId);
     } catch (error) {
-      console.error('Error joining meeting room:', error);
+      console.error('Error setting up video chat:', error);
       setJoined(false);
     }
   };
@@ -88,97 +91,169 @@ export default function VideoChat({ meetingId, userId, localStream, isMuted, isV
     }
   }, [localVideoRef.current]);
 
-  /** 🔗 WebRTC signaling logic via Socket.IO */
+  /** 🔗 WebRTC signaling logic via MeetingSocket */
   useEffect(() => {
-    // Existing users in the room
-    socket.on("all-users", async (userIds) => {
-      for (const id of userIds) await createPeerConnection(id, true);
+    // Listen for existing participants when we join
+    MeetingSocket.on("meeting-joined", async (data) => {
+      console.log('VideoChat: Meeting joined, existing participants:', data.existingParticipants);
+      // Create peer connections with existing participants regardless of local stream
+      if (data.existingParticipants) {
+        for (const participant of data.existingParticipants) {
+          console.log('VideoChat: Creating connection with existing participant:', participant.socketId);
+          await createPeerConnection(participant.socketId, true);
+        }
+      }
     });
 
     // A new user joins
-    socket.on("user-joined", async (id) => {
-      await createPeerConnection(id, false);
+    MeetingSocket.on("user-joined", async (participant) => {
+      console.log('VideoChat: New user joined for WebRTC:', participant);
+      await createPeerConnection(participant.socketId, false);
     });
 
     // Receive an offer
-    socket.on("offer", async ({ from, sdp }) => {
-      const pc = await createPeerConnection(from, false);
-      await pc.setRemoteDescription(new RTCSessionDescription(sdp));
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
-      socket.emit("answer", { to: from, sdp: answer });
+    MeetingSocket.on("offer", async ({ from, sdp }) => {
+      console.log('VideoChat: Received offer from:', from);
+      try {
+        const pc = await createPeerConnection(from, false);
+        await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        MeetingSocket.emit("answer", { to: from, sdp: answer });
+        console.log('VideoChat: Sent answer to:', from);
+      } catch (error) {
+        console.error('VideoChat: Error handling offer:', error);
+      }
     });
 
     // Receive an answer
-    socket.on("answer", async ({ from, sdp }) => {
-      const pc = pcRef.current[from];
-      if (pc) await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+    MeetingSocket.on("answer", async ({ from, sdp }) => {
+      console.log('VideoChat: Received answer from:', from);
+      try {
+        const pc = pcRef.current[from];
+        if (pc) {
+          await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+          console.log('VideoChat: Set remote description from answer');
+        }
+      } catch (error) {
+        console.error('VideoChat: Error handling answer:', error);
+      }
     });
 
     // Receive ICE candidate
-    socket.on("ice-candidate", async ({ from, candidate }) => {
-      const pc = pcRef.current[from];
-      if (pc && candidate)
-        await pc.addIceCandidate(new RTCIceCandidate(candidate));
+    MeetingSocket.on("ice-candidate", async ({ from, candidate }) => {
+      console.log('VideoChat: Received ICE candidate from:', from);
+      try {
+        const pc = pcRef.current[from];
+        if (pc && candidate) {
+          await pc.addIceCandidate(new RTCIceCandidate(candidate));
+          console.log('VideoChat: Added ICE candidate');
+        }
+      } catch (error) {
+        console.error('VideoChat: Error adding ICE candidate:', error);
+      }
     });
 
     // When a user leaves
-    socket.on("user-left", (id) => {
-      const video = document.getElementById(id);
-      if (video) video.remove();
-      if (pcRef.current[id]) pcRef.current[id].close();
-      delete pcRef.current[id];
+    MeetingSocket.on("user-left", (data) => {
+      console.log('VideoChat: User left:', data);
+      const video = document.getElementById(data.socketId);
+      if (video) {
+        video.remove();
+        console.log('VideoChat: Removed video element for:', data.socketId);
+      }
+      if (pcRef.current[data.socketId]) {
+        pcRef.current[data.socketId].close();
+        delete pcRef.current[data.socketId];
+        console.log('VideoChat: Closed peer connection for:', data.socketId);
+      }
     });
 
     return () => {
-      socket.off("all-users");
-      socket.off("user-joined");
-      socket.off("offer");
-      socket.off("answer");
-      socket.off("ice-candidate");
-      socket.off("user-left");
+      MeetingSocket.off("meeting-joined");
+      MeetingSocket.off("user-joined");
+      MeetingSocket.off("offer");
+      MeetingSocket.off("answer");
+      MeetingSocket.off("ice-candidate");
+      MeetingSocket.off("user-left");
     };
   }, []);
 
   /** 🎛️ Create WebRTC Peer Connection */
   const createPeerConnection = async (id, isInitiator) => {
-    const pc = new RTCPeerConnection({
-      iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
-    });
+    try {
+      console.log(`VideoChat: Creating peer connection with ${id}, isInitiator: ${isInitiator}, hasLocalStream: ${!!localStreamRef.current}`);
+      
+      const pc = new RTCPeerConnection({
+        iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+      });
 
-    // Send ICE candidates to the other peer
-    pc.onicecandidate = (event) => {
-      if (event.candidate)
-        socket.emit("ice-candidate", { to: id, candidate: event.candidate });
-    };
+      // Send ICE candidates to the other peer
+      pc.onicecandidate = (event) => {
+        if (event.candidate) {
+          console.log('VideoChat: Sending ICE candidate to:', id);
+          MeetingSocket.emit("ice-candidate", { to: id, candidate: event.candidate });
+        }
+      };
 
-    // When remote stream arrives
-    pc.ontrack = (event) => {
-      const video = document.createElement("video");
-      video.id = id;
-      video.srcObject = event.streams[0];
-      video.autoplay = true;
-      video.playsInline = true;
-      video.className =
-        "w-48 md:w-60 border-2 border-blue-400 rounded-xl shadow-md";
-      document.getElementById("video-grid").appendChild(video);
-    };
+      // When remote stream arrives - this works regardless of local stream
+      pc.ontrack = (event) => {
+        console.log('VideoChat: Received remote stream from:', id);
+        const existingVideo = document.getElementById(id);
+        if (existingVideo) {
+          console.log('VideoChat: Updating existing video element');
+          existingVideo.srcObject = event.streams[0];
+          return;
+        }
 
-    // Add local tracks to the connection
-    localStreamRef.current.getTracks().forEach((track) => {
-      pc.addTrack(track, localStreamRef.current);
-    });
+        const video = document.createElement("video");
+        video.id = id;
+        video.srcObject = event.streams[0];
+        video.autoplay = true;
+        video.playsInline = true;
+        video.muted = false; // Don't mute remote streams
+        video.className = 
+          "w-full max-w-lg h-64 md:h-80 border-2 border-blue-400 rounded-xl shadow-lg object-cover";
+        
+        const videoGrid = document.getElementById("video-grid");
+        if (videoGrid) {
+          videoGrid.appendChild(video);
+          console.log('VideoChat: Added remote video element for:', id);
+        } else {
+          console.error('VideoChat: video-grid not found!');
+        }
+      };
 
-    pcRef.current[id] = pc;
+      // Add local tracks to the connection ONLY if available
+      // This allows receiving without sending
+      if (localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach((track) => {
+          pc.addTrack(track, localStreamRef.current);
+        });
+        console.log('VideoChat: Added local tracks to peer connection for', id);
+      } else {
+        console.log('VideoChat: No local stream - will receive only for', id);
+      }
 
-    // If user is initiator, create an offer
-    if (isInitiator) {
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      socket.emit("offer", { to: id, sdp: offer });
+      pcRef.current[id] = pc;
+
+      // If user is initiator, create an offer
+      if (isInitiator) {
+        console.log('VideoChat: Creating offer for:', id);
+        const offer = await pc.createOffer({
+          offerToReceiveAudio: true,
+          offerToReceiveVideo: true
+        });
+        await pc.setLocalDescription(offer);
+        MeetingSocket.emit("offer", { to: id, sdp: offer });
+        console.log('VideoChat: Sent offer to:', id);
+      }
+
+      return pc;
+    } catch (error) {
+      console.error('VideoChat: Error creating peer connection:', error);
+      throw error;
     }
-
-    return pc;
   };
 
   /** 🖥️ UI */
@@ -198,29 +273,33 @@ export default function VideoChat({ meetingId, userId, localStream, isMuted, isV
             id="video-grid"
             className="flex flex-wrap justify-center gap-4 h-full items-center"
           >
-            <div className="relative w-full max-w-md h-64 bg-gray-800 rounded-xl shadow-lg overflow-hidden">
-              <video
-                ref={localVideoRef}
-                autoPlay
-                muted
-                playsInline
-                className={`w-full h-full object-cover transition-opacity duration-300 ${
-                  isVideoOff ? 'opacity-0' : 'opacity-100'
-                }`}
-              />
-              {isVideoOff && (
-                <div className="absolute inset-0 flex items-center justify-center bg-gray-800">
-                  <div className="text-center text-white">
-                    <div className="w-16 h-16 bg-gray-600 rounded-full flex items-center justify-center mx-auto mb-3">
-                      <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-6-3a2 2 0 11-4 0 2 2 0 014 0zm-2 4a5 5 0 00-4.546 2.916A5.986 5.986 0 0010 16a5.986 5.986 0 004.546-2.084A5 5 0 0010 11z" clipRule="evenodd" />
-                      </svg>
+            {/* Local video - only show if we have a stream */}
+            {localStream && (
+              <div className="relative w-full max-w-md h-64 bg-gray-800 rounded-xl shadow-lg overflow-hidden">
+                <video
+                  ref={localVideoRef}
+                  autoPlay
+                  muted
+                  playsInline
+                  className={`w-full h-full object-cover transition-opacity duration-300 ${
+                    isVideoOff ? 'opacity-0' : 'opacity-100'
+                  }`}
+                />
+                {isVideoOff && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-gray-800">
+                    <div className="text-center text-white">
+                      <div className="w-16 h-16 bg-gray-600 rounded-full flex items-center justify-center mx-auto mb-3">
+                        <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-6-3a2 2 0 11-4 0 2 2 0 014 0zm-2 4a5 5 0 00-4.546 2.916A5.986 5.986 0 0010 16a5.986 5.986 0 004.546-2.084A5 5 0 0010 11z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                      <p className="text-sm text-gray-300">Camera is off</p>
                     </div>
-                    <p className="text-sm text-gray-300">Camera is off</p>
                   </div>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            )}
+            {/* Remote videos will be dynamically added here via createPeerConnection */}
           </div>
         </div>
       ) : (

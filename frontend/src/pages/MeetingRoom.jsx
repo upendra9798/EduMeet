@@ -69,6 +69,7 @@ const MeetingRoom = ({ user }) => {
 
   // Media stream state
   const [localStream, setLocalStream] = useState(null);
+  const [showMediaPrompt, setShowMediaPrompt] = useState(true);
 
   // Load meeting data and join
   useEffect(() => {
@@ -232,28 +233,9 @@ const MeetingRoom = ({ user }) => {
     }
   };
 
-  // Initialize media stream
-  useEffect(() => {
-    const initializeMedia = async () => {
-      try {
-        console.log('MeetingRoom: Requesting media access...');
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: true,
-          audio: true,
-        });
-        setLocalStream(stream);
-        console.log("MeetingRoom: Media stream initialized:", stream);
-      } catch (error) {
-        console.error("Error accessing media devices:", error);
-        setError("Failed to access camera/microphone");
-      }
-    };
-
-    if (joined && !localStream) {
-      console.log('MeetingRoom: Initializing media - joined:', joined, 'hasStream:', !!localStream);
-      initializeMedia();
-    }
-  }, [joined, localStream]);
+  // Initialize media stream (optional - only when explicitly requested)
+  // Media access is now completely optional and only happens when user clicks "Enable Camera & Microphone"
+  // This prevents automatic permission requests that could block meeting access
 
   // Cleanup stream when component unmounts (but not when switching views)
   useEffect(() => {
@@ -269,6 +251,36 @@ const MeetingRoom = ({ user }) => {
   useEffect(() => {
     console.log('MeetingRoom: Active view changed to:', activeView, 'localStream available:', !!localStream);
   }, [activeView, localStream]);
+
+  // Auto-hide media prompt after 2 seconds if no local stream
+  useEffect(() => {
+    if (!localStream && showMediaPrompt) {
+      const timer = setTimeout(() => {
+        setShowMediaPrompt(false);
+      }, 2000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [localStream, showMediaPrompt]);
+
+  // Manual media access request (for users who initially denied or want to enable later)
+  const requestMediaAccess = async () => {
+    try {
+      console.log('MeetingRoom: Manual media access requested...');
+      setShowMediaPrompt(true); // Show prompt while requesting
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: true,
+      });
+      setLocalStream(stream);
+      setShowMediaPrompt(false); // Hide prompt when successful
+      console.log("MeetingRoom: Media stream initialized manually:", stream);
+    } catch (error) {
+      console.error("Error accessing media devices:", error);
+      setShowMediaPrompt(false); // Hide prompt even if failed
+      alert("Unable to access camera/microphone. Please check your browser permissions and try again.");
+    }
+  };
 
   // Handle ending the meeting (host only)
   const handleEndMeeting = async () => {
@@ -563,6 +575,39 @@ const MeetingRoom = ({ user }) => {
                 isMuted={isMuted}
                 isVideoOff={isVideoOff}
               />
+              {/* Overlay for media access when no local stream - positioned at bottom to show other participants */}
+              {!localStream && showMediaPrompt && (
+                <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-10 animate-fade-in">
+                  <div className="text-center p-6 bg-gray-900/95 backdrop-blur-lg rounded-xl border border-gray-700 shadow-2xl max-w-md">
+                    <div className="w-12 h-12 mx-auto mb-3 bg-blue-500 rounded-full flex items-center justify-center">
+                      <VideoIcon className="w-6 h-6" />
+                    </div>
+                    <h3 className="text-lg font-semibold mb-2 text-white">Enable Your Camera & Microphone</h3>
+                    <p className="text-gray-300 mb-4 text-sm">
+                      You can see other participants. Click below to share your camera and microphone.
+                    </p>
+                    <button
+                      onClick={requestMediaAccess}
+                      className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-medium transition-colors text-sm"
+                    >
+                      Enable Media
+                    </button>
+                  </div>
+                </div>
+              )}
+              
+              {/* Small floating button when prompt is hidden */}
+              {!localStream && !showMediaPrompt && (
+                <div className="absolute bottom-4 right-4 z-10">
+                  <button
+                    onClick={() => setShowMediaPrompt(true)}
+                    className="bg-blue-500 hover:bg-blue-600 text-white p-3 rounded-full shadow-lg transition-all hover:scale-110"
+                    title="Enable Camera & Microphone"
+                  >
+                    <VideoIcon className="w-5 h-5" />
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
@@ -571,13 +616,14 @@ const MeetingRoom = ({ user }) => {
               <Whiteboard
                 meetingId={meetingId}
                 userId={user.id}
+                userDisplayName={displayUser.username}
               />
             </div>
           )}
 
           {activeView === "split" && (
             <div className="h-full grid grid-cols-1 lg:grid-cols-2 gap-4 p-4">
-              <div className="bg-black rounded-lg overflow-hidden">
+              <div className="bg-black rounded-lg overflow-hidden relative">
                 <VideoChat
                   meetingId={meetingId}
                   userId={user.id}
@@ -585,11 +631,37 @@ const MeetingRoom = ({ user }) => {
                   isMuted={isMuted}
                   isVideoOff={isVideoOff}
                 />
+                {!localStream && showMediaPrompt && (
+                  <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2">
+                    <div className="text-center p-3 bg-gray-900/95 backdrop-blur-lg rounded-lg border border-gray-700">
+                      <VideoIcon className="w-6 h-6 mx-auto mb-2 text-white" />
+                      <p className="text-xs text-gray-300 mb-2">Video sharing disabled</p>
+                      <button
+                        onClick={requestMediaAccess}
+                        className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-xs transition-colors"
+                      >
+                        Enable
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {!localStream && !showMediaPrompt && (
+                  <div className="absolute bottom-2 right-2">
+                    <button
+                      onClick={() => setShowMediaPrompt(true)}
+                      className="bg-blue-500 hover:bg-blue-600 text-white p-2 rounded shadow-lg transition-all hover:scale-110"
+                      title="Enable Camera & Microphone"
+                    >
+                      <VideoIcon className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
               </div>
               <div className="bg-white rounded-lg overflow-hidden">
                 <Whiteboard
                   meetingId={meetingId}
                   userId={user.id}
+                  userDisplayName={displayUser.username}
                 />
               </div>
             </div>
@@ -763,47 +835,65 @@ const MeetingRoom = ({ user }) => {
       {/* Bottom Controls */}
       <footer className="bg-black/60 backdrop-blur-lg p-6 flex items-center justify-center border-t border-white/10">
         <div className="flex items-center space-x-6">
-          {/* Audio Control */}
-          <div className="flex flex-col items-center">
-            <button
-              onClick={toggleMute}
-              className={`p-4 rounded-2xl transition-all duration-200 transform hover:scale-110 ${
-                isMuted
-                  ? "bg-gradient-to-r from-red-500 to-red-600 shadow-lg shadow-red-500/25"
-                  : "bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-500 hover:to-gray-600 shadow-lg"
-              }`}
-            >
-              {isMuted ? (
-                <MicOff className="w-6 h-6 text-white" />
-              ) : (
-                <Mic className="w-6 h-6 text-white" />
-              )}
-            </button>
-            <span className="text-xs text-gray-300 mt-2 font-medium">
-              {isMuted ? "Unmute" : "Mute"}
-            </span>
-          </div>
+          {/* Media Controls - Show different UI based on media availability */}
+          {localStream ? (
+            <>
+              {/* Audio Control */}
+              <div className="flex flex-col items-center">
+                <button
+                  onClick={toggleMute}
+                  className={`p-4 rounded-2xl transition-all duration-200 transform hover:scale-110 ${
+                    isMuted
+                      ? "bg-gradient-to-r from-red-500 to-red-600 shadow-lg shadow-red-500/25"
+                      : "bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-500 hover:to-gray-600 shadow-lg"
+                  }`}
+                >
+                  {isMuted ? (
+                    <MicOff className="w-6 h-6 text-white" />
+                  ) : (
+                    <Mic className="w-6 h-6 text-white" />
+                  )}
+                </button>
+                <span className="text-xs text-gray-300 mt-2 font-medium">
+                  {isMuted ? "Unmute" : "Mute"}
+                </span>
+              </div>
 
-          {/* Video Control */}
-          <div className="flex flex-col items-center">
-            <button
-              onClick={toggleVideo}
-              className={`p-4 rounded-2xl transition-all duration-200 transform hover:scale-110 ${
-                isVideoOff
-                  ? "bg-gradient-to-r from-red-500 to-red-600 shadow-lg shadow-red-500/25"
-                  : "bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-500 hover:to-gray-600 shadow-lg"
-              }`}
-            >
-              {isVideoOff ? (
-                <VideoOff className="w-6 h-6 text-white" />
-              ) : (
+              {/* Video Control */}
+              <div className="flex flex-col items-center">
+                <button
+                  onClick={toggleVideo}
+                  className={`p-4 rounded-2xl transition-all duration-200 transform hover:scale-110 ${
+                    isVideoOff
+                      ? "bg-gradient-to-r from-red-500 to-red-600 shadow-lg shadow-red-500/25"
+                      : "bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-500 hover:to-gray-600 shadow-lg"
+                  }`}
+                >
+                  {isVideoOff ? (
+                    <VideoOff className="w-6 h-6 text-white" />
+                  ) : (
+                    <VideoIcon className="w-6 h-6 text-white" />
+                  )}
+                </button>
+                <span className="text-xs text-gray-300 mt-2 font-medium">
+                  {isVideoOff ? "Start Video" : "Stop Video"}
+                </span>
+              </div>
+            </>
+          ) : (
+            /* Enable Media Button when no stream available */
+            <div className="flex flex-col items-center">
+              <button
+                onClick={requestMediaAccess}
+                className="p-4 rounded-2xl bg-gradient-to-r from-green-600 to-green-700 hover:from-green-500 hover:to-green-600 shadow-lg shadow-green-500/25 transition-all duration-200 transform hover:scale-110"
+              >
                 <VideoIcon className="w-6 h-6 text-white" />
-              )}
-            </button>
-            <span className="text-xs text-gray-300 mt-2 font-medium">
-              {isVideoOff ? "Start Video" : "Stop Video"}
-            </span>
-          </div>
+              </button>
+              <span className="text-xs text-gray-300 mt-2 font-medium">
+                Enable Media
+              </span>
+            </div>
+          )}
 
           {/* Participants */}
           <div className="flex flex-col items-center">

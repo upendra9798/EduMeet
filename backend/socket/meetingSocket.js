@@ -56,14 +56,23 @@ const meetingSocket = (io) => {
         // Store user-meeting association
         userMeetings[socket.id] = { userId, meetingId, roomId, displayName };
 
-        // Update current participants in database - always add new entry for each socket connection
-        meeting.currentParticipants.push({
-          userId,
-          socketId: socket.id,
-          displayName: displayName || `User ${userId.slice(-4)}`,
-          joinedAt: new Date(),
-          isHost: meeting.host.toString() === userId
-        });
+        // Update current participants in database - check if user already exists
+        const existingParticipant = meeting.currentParticipants.find(p => p.userId === userId);
+        
+        if (!existingParticipant) {
+          // Add new participant only if user not already in meeting
+          meeting.currentParticipants.push({
+            userId,
+            socketId: socket.id,
+            displayName: displayName || `User ${userId.slice(-4)}`,
+            joinedAt: new Date(),
+            isHost: meeting.host.toString() === userId
+          });
+        } else {
+          // Update existing participant's socket ID (in case they reconnected)
+          existingParticipant.socketId = socket.id;
+          existingParticipant.displayName = displayName || existingParticipant.displayName;
+        }
         await meeting.save();
 
         const otherUsers = users[roomId].filter((id) => id !== socket.id);
@@ -176,11 +185,19 @@ const meetingSocket = (io) => {
           if (users[roomId]) {
             users[roomId] = users[roomId].filter((id) => id !== socket.id);
             
-            // Notify others in the room
-            socket.to(roomId).emit("user-left", {
-              socketId: socket.id,
-              userId
+            // Check if this user has any other active connections in this room
+            const userStillInRoom = users[roomId].some(socketId => {
+              const session = userMeetings[socketId];
+              return session && session.userId === userId;
             });
+            
+            // Only notify others if this was the user's last connection
+            if (!userStillInRoom) {
+              socket.to(roomId).emit("user-left", {
+                socketId: socket.id,
+                userId
+              });
+            }
 
             // Clean up empty rooms
             if (users[roomId].length === 0) {
@@ -188,19 +205,38 @@ const meetingSocket = (io) => {
             }
           }
 
-          // Update database - remove from current participants
+          // Update database - remove participant only if no other connections exist
           const meeting = await Meeting.findOne({ meetingId });
           if (meeting) {
-            meeting.currentParticipants = meeting.currentParticipants.filter(
-              p => p.socketId !== socket.id
+            // Check if user has other active connections
+            const hasOtherConnections = Object.values(userMeetings).some(session => 
+              session.userId === userId && session.socketId !== socket.id
             );
+            
+            if (!hasOtherConnections) {
+              // Remove user completely from current participants
+              meeting.currentParticipants = meeting.currentParticipants.filter(
+                p => p.userId !== userId
+              );
+            } else {
+              // Just update the socket ID to another active connection
+              const otherConnection = Object.entries(userMeetings).find(([socketId, session]) => 
+                session.userId === userId && socketId !== socket.id
+              );
+              if (otherConnection) {
+                const participant = meeting.currentParticipants.find(p => p.userId === userId);
+                if (participant) {
+                  participant.socketId = otherConnection[0];
+                }
+              }
+            }
             await meeting.save();
           }
 
           // Clean up user session
           delete userMeetings[socket.id];
           
-          console.log(`🔴 User ${userId} disconnected from meeting ${meetingId}`);
+          console.log(`🔴 Socket ${socket.id} for user ${userId} disconnected from meeting ${meetingId}`);
         }
       } catch (error) {
         console.error('Error handling disconnect:', error);

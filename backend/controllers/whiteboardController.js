@@ -54,8 +54,8 @@ export const createWhiteboard = async (req, res) => {
             backgroundColor: backgroundColor || '#ffffff',
             permissions: {
                 allowedDrawers: [userId],
-                restrictToHost: meeting.host === userId,
-                publicDrawing: false // Only host can draw by default
+                restrictToHost: false, // Allow all participants to draw
+                publicDrawing: true // Enable multi-user drawing by default
             },
             lastModified: {
                 timestamp: new Date(),
