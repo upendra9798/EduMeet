@@ -22,6 +22,8 @@ const Whiteboard = ({ meetingId, userId, userDisplayName }) => {
   const [userRole, setUserRole] = useState('participant');
   const [whiteboardPermissions, setWhiteboardPermissions] = useState({});
   const [hasDrawingActivity, setHasDrawingActivity] = useState(false);
+  const [isWhiteboardReady, setIsWhiteboardReady] = useState(false);
+  const [pendingElements, setPendingElements] = useState(null);
 
   // History (Undo/Redo) management
   const [history, setHistory] = useState([]);
@@ -94,9 +96,16 @@ const Whiteboard = ({ meetingId, userId, userDisplayName }) => {
 
     // Listen for whiteboard state (initial load)
     newSocket.on("whiteboard-state", (data) => {
+      console.log("Received whiteboard state:", data);
       if (data.elements && data.elements.length > 0) {
-        loadWhiteboardElements(data.elements);
+        if (isWhiteboardReady) {
+          loadWhiteboardElements(data.elements);
+        } else {
+          // Store elements to load once canvas is ready
+          setPendingElements(data.elements);
+        }
       }
+      setHasDrawingActivity(data.elements && data.elements.length > 0);
     });
 
     // Listen for real-time drawing events
@@ -168,9 +177,20 @@ const Whiteboard = ({ meetingId, userId, userDisplayName }) => {
     context.lineWidth = brushSize;
     contextRef.current = context;
 
-    // Save initial blank state
-    saveCanvasState();
-  }, []);
+    // Mark whiteboard as ready
+    setIsWhiteboardReady(true);
+
+    // Load pending elements if any
+    if (pendingElements && pendingElements.length > 0) {
+      setTimeout(() => {
+        loadWhiteboardElements(pendingElements);
+        setPendingElements(null);
+      }, 100);
+    } else {
+      // Only save initial blank state if no pending elements
+      saveCanvasState();
+    }
+  }, [pendingElements]);
 
   /* ------------------------------------------------------------------
      3️⃣ Drawing Event Handlers (with proper permissions)
@@ -296,12 +316,12 @@ const Whiteboard = ({ meetingId, userId, userDisplayName }) => {
     // Create element data for the completed drawing
     const canvas = canvasRef.current;
     const elementData = {
-      type: 'drawing',
+      type: 'canvasState',
       tool,
       color,
       brushSize,
       timestamp: Date.now(),
-      // Could add path data here for vector storage
+      imageData: canvas.toDataURL(), // Save entire canvas state
     };
 
     // Notify drawing end with element data
@@ -393,8 +413,42 @@ const Whiteboard = ({ meetingId, userId, userDisplayName }) => {
   const loadWhiteboardElements = (elements) => {
     // Load existing whiteboard elements when joining
     console.log("Loading whiteboard elements:", elements);
-    // Implementation depends on how elements are stored
-    // For now, this could reconstruct the canvas from stored paths
+    
+    if (!elements || elements.length === 0) {
+      console.log("No existing elements to load");
+      return;
+    }
+
+    const canvas = canvasRef.current;
+    const context = contextRef.current;
+    
+    if (!canvas || !context) {
+      console.log("Canvas not ready yet, will retry loading elements");
+      return;
+    }
+
+    // Clear canvas before loading elements
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Restore elements (for now, we'll use a simpler approach with canvas state)
+    elements.forEach((element, index) => {
+      if (element.type === 'canvasState' && element.imageData) {
+        try {
+          // Create image from stored data
+          const img = new Image();
+          img.onload = () => {
+            context.drawImage(img, 0, 0);
+            console.log(`Loaded canvas state element ${index}`);
+          };
+          img.src = element.imageData;
+        } catch (error) {
+          console.error("Failed to load canvas state:", error);
+        }
+      }
+    });
+    
+    // Save current state after loading
+    setTimeout(() => saveCanvasState(), 100);
   };
 
   /* ------------------------------------------------------------------
@@ -601,14 +655,10 @@ const Whiteboard = ({ meetingId, userId, userDisplayName }) => {
             }}
           >
             <div
-              className="w-4 h-4 rounded-full border-2 border-white"
+              className="w-4 h-4 rounded-full border-2 border-white shadow-lg"
               style={{ backgroundColor: cursor.color }}
+              title={cursor.displayName} // Show name on hover instead
             />
-            <div
-              className="text-xs text-white bg-black bg-opacity-75 px-1 py-0.5 rounded mt-1 whitespace-nowrap"
-            >
-              {cursor.displayName}
-            </div>
           </div>
         ))}
         

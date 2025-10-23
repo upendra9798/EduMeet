@@ -4,7 +4,7 @@ import mongoose from 'mongoose';
 const drawingElementSchema = new mongoose.Schema({
     type: {
         type: String,
-        enum: ['stroke', 'eraser', 'text', 'shape'],
+        enum: ['stroke', 'eraser', 'text', 'shape', 'canvasState'],
         required: true
     },
     tool: {
@@ -53,6 +53,10 @@ const drawingElementSchema = new mongoose.Schema({
     endPoint: {
         x: Number,
         y: Number
+    },
+    // For canvasState type - store entire canvas as image
+    imageData: {
+        type: String // Base64 encoded image data
     },
     // Metadata
     createdBy: {
