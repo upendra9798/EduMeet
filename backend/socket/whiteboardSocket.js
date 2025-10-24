@@ -120,14 +120,35 @@ const whiteboardSocketHandler = (io) => {
                     timestamp: new Date()
                 });
 
+                // Ensure we have the freshest whiteboard data
+                let freshWhiteboard = whiteboard;
+                if (whiteboard) {
+                    try {
+                        // Fetch the very latest version from database
+                        freshWhiteboard = await Whiteboard.findById(whiteboard._id);
+                    } catch (refreshError) {
+                        console.log('Could not refresh whiteboard data, using cached version:', refreshError.message);
+                    }
+                }
+
                 // Send current whiteboard state (fallback if no whiteboard)
+                const canvasStateElement = freshWhiteboard ? freshWhiteboard.elements.find(el => el.type === 'canvasState') : null;
+                
+                console.log(`Sending whiteboard state to user ${userId}:`, {
+                    hasWhiteboard: !!freshWhiteboard,
+                    elementCount: freshWhiteboard ? freshWhiteboard.elements.length : 0,
+                    hasCanvasState: !!canvasStateElement,
+                    version: freshWhiteboard ? freshWhiteboard.version : 1
+                });
+
                 socket.emit('whiteboard-state', {
-                    elements: whiteboard ? whiteboard.elements : [],
-                    backgroundColor: whiteboard ? whiteboard.backgroundColor : '#ffffff',
-                    backgroundImage: whiteboard ? whiteboard.backgroundImage : null,
-                    canvasWidth: whiteboard ? whiteboard.canvasWidth : 800,
-                    canvasHeight: whiteboard ? whiteboard.canvasHeight : 600,
-                    version: whiteboard ? whiteboard.version : 1
+                    elements: freshWhiteboard ? freshWhiteboard.elements.filter(el => el.type !== 'canvasState') : [],
+                    backgroundColor: freshWhiteboard ? freshWhiteboard.backgroundColor : '#ffffff',
+                    backgroundImage: freshWhiteboard ? freshWhiteboard.backgroundImage : null,
+                    canvasWidth: freshWhiteboard ? freshWhiteboard.canvasWidth : 800,
+                    canvasHeight: freshWhiteboard ? freshWhiteboard.canvasHeight : 600,
+                    version: freshWhiteboard ? freshWhiteboard.version : 1,
+                    canvasState: canvasStateElement ? canvasStateElement.imageData : null
                 });
 
                 // Send current participants (fallback if no session)
@@ -143,6 +164,18 @@ const whiteboardSocketHandler = (io) => {
                 }
 
                 console.log(`User ${userId} successfully joined whiteboard ${whiteboardId} as ${role}`);
+
+                // If this user has canvas state and others might not, broadcast the state to ensure sync
+                if (canvasStateElement) {
+                    const roomName = `whiteboard-${whiteboardId}`;
+                    socket.to(roomName).emit('canvas-state-updated', {
+                        imageData: canvasStateElement.imageData,
+                        updatedBy: userId,
+                        version: freshWhiteboard ? freshWhiteboard.version : 1,
+                        timestamp: new Date()
+                    });
+                    console.log(`Broadcasted canvas state to room ${roomName} from user ${userId}`);
+                }
 
             } catch (error) {
                 console.error('Error joining whiteboard:', error);
@@ -403,6 +436,114 @@ const whiteboardSocketHandler = (io) => {
 
             } catch (error) {
                 console.error('Error saving snapshot:', error);
+            }
+        });
+
+        // Handle canvas state saving (for persistence across view switches)
+        socket.on('save-canvas-state', async (data) => {
+            try {
+                if (!currentWhiteboardId || !data.imageData) return;
+
+                console.log(`Saving canvas state for whiteboard ${currentWhiteboardId} by user ${userId}`);
+
+                // Use findOneAndUpdate with retry logic to handle version conflicts
+                let retryCount = 0;
+                const maxRetries = 3;
+                
+                while (retryCount < maxRetries) {
+                    try {
+                        // Find and update in a single atomic operation
+                        const whiteboard = await Whiteboard.findOneAndUpdate(
+                            { whiteboardId: currentWhiteboardId },
+                            {
+                                $pull: { elements: { type: 'canvasState' } } // Remove old canvas states
+                            },
+                            { new: true }
+                        );
+
+                        if (whiteboard) {
+                            // Create a canvas state element
+                            const canvasStateElement = {
+                                type: 'canvasState',
+                                tool: 'canvasState',
+                                imageData: data.imageData,
+                                createdBy: userId,
+                                createdAt: new Date()
+                            };
+
+                            // Add new canvas state
+                            const updatedWhiteboard = await Whiteboard.findOneAndUpdate(
+                                { whiteboardId: currentWhiteboardId },
+                                {
+                                    $push: { elements: canvasStateElement },
+                                    $set: {
+                                        lastModified: {
+                                            timestamp: new Date(),
+                                            modifiedBy: userId
+                                        }
+                                    },
+                                    $inc: { version: 1 }
+                                },
+                                { new: true }
+                            );
+
+                            console.log(`Canvas state saved for whiteboard ${currentWhiteboardId}, version ${updatedWhiteboard.version}`);
+
+                            // Broadcast to other users
+                            const roomName = `whiteboard-${currentWhiteboardId}`;
+                            socket.to(roomName).emit('canvas-state-updated', {
+                                imageData: data.imageData,
+                                version: updatedWhiteboard.version,
+                                updatedBy: userId,
+                                timestamp: new Date()
+                            });
+
+                            socket.emit('canvas-state-saved', { 
+                                message: 'Canvas state saved successfully',
+                                version: updatedWhiteboard.version 
+                            });
+                            
+                            return; // Success, exit the retry loop
+                        }
+                    } catch (versionError) {
+                        console.log(`Version conflict on attempt ${retryCount + 1}, retrying...`);
+                        retryCount++;
+                        if (retryCount >= maxRetries) {
+                            throw versionError;
+                        }
+                        // Wait a bit before retrying
+                        await new Promise(resolve => setTimeout(resolve, 50));
+                    }
+                }
+
+            } catch (error) {
+                console.error('Error saving canvas state:', error);
+                socket.emit('canvas-state-save-failed', { message: 'Failed to save canvas state' });
+            }
+        });
+
+        // Handle immediate canvas state broadcast for real-time sync
+        socket.on('broadcast-canvas-state', async (data) => {
+            try {
+                if (!currentWhiteboardId || !userId) {
+                    console.log('Missing whiteboard ID or user ID for canvas state broadcast');
+                    return;
+                }
+
+                console.log(`Broadcasting canvas state from user ${userId} to all participants`);
+
+                // Immediately broadcast to all other users in the room
+                const roomName = `whiteboard-${currentWhiteboardId}`;
+                socket.to(roomName).emit('canvas-state-broadcast', {
+                    imageData: data.imageData,
+                    updatedBy: userId,
+                    timestamp: new Date()
+                });
+
+                console.log(`Canvas state broadcast sent to room ${roomName}`);
+
+            } catch (error) {
+                console.error('Error broadcasting canvas state:', error);
             }
         });
 

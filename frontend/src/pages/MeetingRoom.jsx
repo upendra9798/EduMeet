@@ -263,6 +263,8 @@ const MeetingRoom = ({ user }) => {
     }
   }, [localStream, showMediaPrompt]);
 
+
+
   // Manual media access request (for users who initially denied or want to enable later)
   const requestMediaAccess = async () => {
     try {
@@ -486,26 +488,26 @@ const MeetingRoom = ({ user }) => {
   return (
     <div className="h-screen bg-gradient-to-br from-gray-900 via-slate-800 to-gray-900 flex flex-col">
       {/* Top Bar */}
-      <header className="bg-black/40 backdrop-blur-lg text-white p-6 flex items-center justify-between border-b border-white/10">
-        <div className="flex items-center space-x-6">
+      <header className="bg-black/40 backdrop-blur-lg text-white p-3 flex items-center justify-between border-b border-white/10">
+        <div className="flex items-center space-x-3">
           <button
             onClick={() => navigate("/dashboard")}
-            className="p-3 hover:bg-white/10 rounded-xl transition-all duration-200 transform hover:scale-105"
+            className="p-2 hover:bg-white/10 rounded-lg transition-all duration-200 transform hover:scale-105"
           >
-            <ArrowLeft className="w-6 h-6" />
+            <ArrowLeft className="w-4 h-4" />
           </button>
-          <div className="flex items-center space-x-4">
-            <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-500 rounded-xl flex items-center justify-center">
-              <VideoIcon className="w-6 h-6 text-white" />
+          <div className="flex items-center space-x-2">
+            <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-500 rounded-lg flex items-center justify-center">
+              <VideoIcon className="w-4 h-4 text-white" />
             </div>
             <div>
-              <h1 className="text-xl font-bold">
+              <h1 className="text-sm font-bold">
                 {meeting?.title || "Meeting Room"}
               </h1>
-              <div className="flex items-center space-x-3">
-                <span className="text-sm text-gray-300">ID: {meetingId}</span>
+              <div className="flex items-center space-x-2">
+                <span className="text-xs text-gray-300">ID: {meetingId}</span>
                 <div className="flex items-center space-x-1">
-                  <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                  <div className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"></div>
                   <span className="text-xs text-green-400">Live</span>
                 </div>
               </div>
@@ -513,40 +515,40 @@ const MeetingRoom = ({ user }) => {
           </div>
         </div>
 
-        <div className="flex items-center space-x-6">
+        <div className="flex items-center space-x-3">
           {/* View Toggle */}
-          <div className="flex bg-white/10 backdrop-blur-md rounded-2xl p-2 border border-white/20">
+          <div className="flex bg-white/10 backdrop-blur-md rounded-lg p-1 border border-white/20">
             <button
               onClick={() => setActiveView("video")}
-              className={`flex items-center px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
+              className={`flex items-center px-2 py-1 rounded-md text-xs font-medium transition-all duration-200 ${
                 activeView === "video"
                   ? "bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg transform scale-105"
                   : "text-gray-300 hover:text-white hover:bg-white/10"
               }`}
             >
-              <VideoIcon className="w-4 h-4 mr-2" />
+              <VideoIcon className="w-3 h-3 mr-1" />
               Video
             </button>
             <button
               onClick={() => setActiveView("whiteboard")}
-              className={`flex items-center px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
+              className={`flex items-center px-2 py-1 rounded-md text-xs font-medium transition-all duration-200 ${
                 activeView === "whiteboard"
                   ? "bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-lg transform scale-105"
                   : "text-gray-300 hover:text-white hover:bg-white/10"
               }`}
             >
-              <PenTool className="w-4 h-4 mr-2" />
+              <PenTool className="w-3 h-3 mr-1" />
               Whiteboard
             </button>
             <button
               onClick={() => setActiveView("split")}
-              className={`flex items-center px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
+              className={`flex items-center px-2 py-1 rounded-md text-xs font-medium transition-all duration-200 ${
                 activeView === "split"
                   ? "bg-gradient-to-r from-green-500 to-green-600 text-white shadow-lg transform scale-105"
                   : "text-gray-300 hover:text-white hover:bg-white/10"
               }`}
             >
-              <Users className="w-4 h-4 mr-2" />
+              <Users className="w-3 h-3 mr-1" />
               Split View
             </button>
           </div>
@@ -554,10 +556,10 @@ const MeetingRoom = ({ user }) => {
           {/* Participants Count */}
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="flex items-center space-x-2 bg-gray-700 px-3 py-2 rounded-md hover:bg-gray-600"
+            className="flex items-center space-x-1 bg-gray-700 px-2 py-1 rounded-md hover:bg-gray-600"
           >
-            <Users className="w-4 h-4" />
-            <span className="text-sm">{participants.length + 1}</span>
+            <Users className="w-3 h-3" />
+            <span className="text-xs">{participants.length + 1}</span>
           </button>
         </div>
       </header>
@@ -611,12 +613,14 @@ const MeetingRoom = ({ user }) => {
             </div>
           )}
 
+          {/* Show whiteboard content based on view */}
           {activeView === "whiteboard" && (
             <div className="h-full">
               <Whiteboard
                 meetingId={meetingId}
                 userId={user.id}
                 userDisplayName={displayUser.username}
+                participantCount={participants.length + 1}
               />
             </div>
           )}
@@ -662,6 +666,7 @@ const MeetingRoom = ({ user }) => {
                   meetingId={meetingId}
                   userId={user.id}
                   userDisplayName={displayUser.username}
+                  participantCount={participants.length + 1}
                 />
               </div>
             </div>
@@ -833,8 +838,8 @@ const MeetingRoom = ({ user }) => {
       </div>
 
       {/* Bottom Controls */}
-      <footer className="bg-black/60 backdrop-blur-lg p-6 flex items-center justify-center border-t border-white/10">
-        <div className="flex items-center space-x-6">
+      <footer className="bg-black/60 backdrop-blur-lg p-3 flex items-center justify-center border-t border-white/10">
+        <div className="flex items-center space-x-4">
           {/* Media Controls - Show different UI based on media availability */}
           {localStream ? (
             <>
@@ -842,19 +847,19 @@ const MeetingRoom = ({ user }) => {
               <div className="flex flex-col items-center">
                 <button
                   onClick={toggleMute}
-                  className={`p-4 rounded-2xl transition-all duration-200 transform hover:scale-110 ${
+                  className={`p-2 rounded-lg transition-all duration-200 transform hover:scale-110 ${
                     isMuted
                       ? "bg-gradient-to-r from-red-500 to-red-600 shadow-lg shadow-red-500/25"
                       : "bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-500 hover:to-gray-600 shadow-lg"
                   }`}
                 >
                   {isMuted ? (
-                    <MicOff className="w-6 h-6 text-white" />
+                    <MicOff className="w-4 h-4 text-white" />
                   ) : (
-                    <Mic className="w-6 h-6 text-white" />
+                    <Mic className="w-4 h-4 text-white" />
                   )}
                 </button>
-                <span className="text-xs text-gray-300 mt-2 font-medium">
+                <span className="text-xs text-gray-300 mt-1 font-medium">
                   {isMuted ? "Unmute" : "Mute"}
                 </span>
               </div>
@@ -863,19 +868,19 @@ const MeetingRoom = ({ user }) => {
               <div className="flex flex-col items-center">
                 <button
                   onClick={toggleVideo}
-                  className={`p-4 rounded-2xl transition-all duration-200 transform hover:scale-110 ${
+                  className={`p-2 rounded-lg transition-all duration-200 transform hover:scale-110 ${
                     isVideoOff
                       ? "bg-gradient-to-r from-red-500 to-red-600 shadow-lg shadow-red-500/25"
                       : "bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-500 hover:to-gray-600 shadow-lg"
                   }`}
                 >
                   {isVideoOff ? (
-                    <VideoOff className="w-6 h-6 text-white" />
+                    <VideoOff className="w-4 h-4 text-white" />
                   ) : (
-                    <VideoIcon className="w-6 h-6 text-white" />
+                    <VideoIcon className="w-4 h-4 text-white" />
                   )}
                 </button>
-                <span className="text-xs text-gray-300 mt-2 font-medium">
+                <span className="text-xs text-gray-300 mt-1 font-medium">
                   {isVideoOff ? "Start Video" : "Stop Video"}
                 </span>
               </div>
@@ -885,11 +890,11 @@ const MeetingRoom = ({ user }) => {
             <div className="flex flex-col items-center">
               <button
                 onClick={requestMediaAccess}
-                className="p-4 rounded-2xl bg-gradient-to-r from-green-600 to-green-700 hover:from-green-500 hover:to-green-600 shadow-lg shadow-green-500/25 transition-all duration-200 transform hover:scale-110"
+                className="p-2 rounded-lg bg-gradient-to-r from-green-600 to-green-700 hover:from-green-500 hover:to-green-600 shadow-lg shadow-green-500/25 transition-all duration-200 transform hover:scale-110"
               >
-                <VideoIcon className="w-6 h-6 text-white" />
+                <VideoIcon className="w-4 h-4 text-white" />
               </button>
-              <span className="text-xs text-gray-300 mt-2 font-medium">
+              <span className="text-xs text-gray-300 mt-1 font-medium">
                 Enable Media
               </span>
             </div>
@@ -902,15 +907,15 @@ const MeetingRoom = ({ user }) => {
                 setParticipantsSidebarOpen(!participantsSidebarOpen);
                 setChatSidebarOpen(false); // Close chat sidebar if open
               }}
-              className={`p-4 rounded-2xl shadow-lg transition-all duration-200 transform hover:scale-110 ${
+              className={`p-2 rounded-lg shadow-lg transition-all duration-200 transform hover:scale-110 ${
                 participantsSidebarOpen
                   ? "bg-gradient-to-r from-blue-500 to-blue-600"
                   : "bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600"
               }`}
             >
-              <Users className="w-6 h-6 text-white" />
+              <Users className="w-4 h-4 text-white" />
             </button>
-            <span className="text-xs text-gray-300 mt-2 font-medium">
+            <span className="text-xs text-gray-300 mt-1 font-medium">
               Participants ({participants.length + 1})
             </span>
           </div>
@@ -922,15 +927,15 @@ const MeetingRoom = ({ user }) => {
                 setChatSidebarOpen(!chatSidebarOpen);
                 setParticipantsSidebarOpen(false); // Close participants sidebar if open
               }}
-              className={`p-4 rounded-2xl shadow-lg transition-all duration-200 transform hover:scale-110 ${
+              className={`p-2 rounded-lg shadow-lg transition-all duration-200 transform hover:scale-110 ${
                 chatSidebarOpen
                   ? "bg-gradient-to-r from-purple-500 to-purple-600"
                   : "bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-500 hover:to-purple-600"
               }`}
             >
-              <MessageSquare className="w-6 h-6 text-white" />
+              <MessageSquare className="w-4 h-4 text-white" />
             </button>
-            <span className="text-xs text-gray-300 mt-2 font-medium">
+            <span className="text-xs text-gray-300 mt-1 font-medium">
               Chat {messages.length > 0 && `(${messages.length})`}
             </span>
           </div>
@@ -939,36 +944,36 @@ const MeetingRoom = ({ user }) => {
           <div className="flex flex-col items-center">
             <button
               onClick={handleLeaveMeeting}
-              className="p-4 rounded-2xl bg-gradient-to-r from-red-500 to-red-600 hover:from-red-400 hover:to-red-500 shadow-lg shadow-red-500/25 transition-all duration-200 transform hover:scale-110"
+              className="p-2 rounded-lg bg-gradient-to-r from-red-500 to-red-600 hover:from-red-400 hover:to-red-500 shadow-lg shadow-red-500/25 transition-all duration-200 transform hover:scale-110"
             >
-              <Phone className="w-6 h-6 text-white transform rotate-[135deg]" />
+              <Phone className="w-4 h-4 text-white transform rotate-[135deg]" />
             </button>
-            <span className="text-xs text-gray-300 mt-2 font-medium">
+            <span className="text-xs text-gray-300 mt-1 font-medium">
               Leave
             </span>
           </div>
 
           {/* End Meeting (Host Only) */}
           {isHost && (
-            <div className="flex flex-col items-center ml-6 pl-6 border-l border-white/20">
+            <div className="flex flex-col items-center ml-4 pl-4 border-l border-white/20">
               <button
                 onClick={handleEndMeeting}
-                className="px-6 py-3 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 rounded-xl text-white font-semibold shadow-lg shadow-red-500/25 transition-all duration-200 transform hover:scale-105"
+                className="px-3 py-2 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 rounded-lg text-white text-xs font-semibold shadow-lg shadow-red-500/25 transition-all duration-200 transform hover:scale-105"
               >
                 End Meeting
               </button>
-              <span className="text-xs text-gray-300 mt-2 font-medium">
+              <span className="text-xs text-gray-300 mt-1 font-medium">
                 Host Controls
               </span>
             </div>
           )}
 
           {/* Settings */}
-          <div className="flex flex-col items-center ml-6 pl-6 border-l border-white/20">
-            <button className="p-4 rounded-2xl bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-500 hover:to-gray-600 shadow-lg transition-all duration-200 transform hover:scale-110">
-              <Settings className="w-6 h-6 text-white" />
+          <div className="flex flex-col items-center ml-4 pl-4 border-l border-white/20">
+            <button className="p-2 rounded-lg bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-500 hover:to-gray-600 shadow-lg transition-all duration-200 transform hover:scale-110">
+              <Settings className="w-4 h-4 text-white" />
             </button>
-            <span className="text-xs text-gray-300 mt-2 font-medium">
+            <span className="text-xs text-gray-300 mt-1 font-medium">
               Settings
             </span>
           </div>

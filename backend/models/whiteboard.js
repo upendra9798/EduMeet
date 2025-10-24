@@ -9,7 +9,7 @@ const drawingElementSchema = new mongoose.Schema({
     },
     tool: {
         type: String,
-        enum: ['pen', 'eraser', 'highlighter', 'text', 'rectangle', 'circle', 'line'],
+        enum: ['pen', 'eraser', 'highlighter', 'text', 'rectangle', 'circle', 'line', 'canvasState'],
         required: true
     },
     color: {

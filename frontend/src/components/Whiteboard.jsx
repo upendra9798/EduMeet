@@ -2,7 +2,7 @@ import React, { useRef, useEffect, useState } from "react";
 import io from "socket.io-client";
 
 // ✅ Whiteboard Component — shared interactive canvas for meetings with multi-user support
-const Whiteboard = ({ meetingId, userId, userDisplayName }) => {
+const Whiteboard = ({ meetingId, userId, userDisplayName, participantCount }) => {
   // References for canvas and its context (for drawing)
   const canvasRef = useRef(null);
   const contextRef = useRef(null);
@@ -28,6 +28,50 @@ const Whiteboard = ({ meetingId, userId, userDisplayName }) => {
   // History (Undo/Redo) management
   const [history, setHistory] = useState([]);
   const [historyStep, setHistoryStep] = useState(-1);
+
+  // Generate a unique key for localStorage based on meeting and user
+  const storageKey = `whiteboard_${meetingId}_${userId}`;
+
+  // Save canvas state to localStorage
+  const saveToLocalStorage = () => {
+    if (canvasRef.current) {
+      const imageData = canvasRef.current.toDataURL();
+      localStorage.setItem(storageKey, imageData);
+      console.log("Canvas state saved to localStorage");
+    }
+  };
+
+  // Load canvas state from localStorage
+  const loadFromLocalStorage = () => {
+    const savedState = localStorage.getItem(storageKey);
+    if (savedState && canvasRef.current && contextRef.current) {
+      const img = new Image();
+      img.onload = () => {
+        const ctx = contextRef.current;
+        const canvas = canvasRef.current;
+        // Save current transform
+        ctx.save();
+        // Reset transform to avoid scaling issues
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        // Clear and draw at actual canvas size
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        // Restore the transform
+        ctx.restore();
+        console.log("Canvas state loaded from localStorage");
+      };
+      img.src = savedState;
+      return true;
+    }
+    return false;
+  };
+
+  // Sync with parent participant count when it changes
+  useEffect(() => {
+    if (participantCount && participantCount > activeUsers.length) {
+      console.log(`Parent participant count (${participantCount}) is higher than whiteboard count (${activeUsers.length}), syncing...`);
+    }
+  }, [participantCount, activeUsers.length]);
 
   /* ------------------------------------------------------------------
      1️⃣ Setup Socket.io connection and event listeners
@@ -60,7 +104,10 @@ const Whiteboard = ({ meetingId, userId, userDisplayName }) => {
     // Listen for participants list updates
     newSocket.on("participants-list", (data) => {
       console.log("Whiteboard participants:", data.participants);
-      setActiveUsers(data.participants);
+      // Only update if we don't have a parent participant count or if this is more current
+      if (!participantCount || data.participants.length > 0) {
+        setActiveUsers(data.participants);
+      }
     });
 
     // Listen for user join/leave events
@@ -96,16 +143,38 @@ const Whiteboard = ({ meetingId, userId, userDisplayName }) => {
 
     // Listen for whiteboard state (initial load)
     newSocket.on("whiteboard-state", (data) => {
-      console.log("Received whiteboard state:", data);
-      if (data.elements && data.elements.length > 0) {
+      console.log("Received whiteboard state:", {
+        hasElements: data.elements && data.elements.length > 0,
+        elementCount: data.elements ? data.elements.length : 0,
+        hasCanvasState: !!data.canvasState,
+        canvasStateLength: data.canvasState ? data.canvasState.length : 0,
+        version: data.version
+      });
+      
+      // Check if there's a saved canvas state (image)
+      if (data.canvasState) {
+        console.log("Loading saved canvas state from server");
+        if (isWhiteboardReady) {
+          loadCanvasFromImage(data.canvasState);
+        } else {
+          console.log("Canvas not ready, storing canvas state for later");
+          // Store canvas state to load once canvas is ready
+          setPendingElements({ canvasState: data.canvasState });
+        }
+      } else if (data.elements && data.elements.length > 0) {
+        console.log("Loading individual elements");
         if (isWhiteboardReady) {
           loadWhiteboardElements(data.elements);
         } else {
+          console.log("Canvas not ready, storing elements for later");
           // Store elements to load once canvas is ready
           setPendingElements(data.elements);
         }
+      } else {
+        console.log("No canvas state or elements to load");
       }
-      setHasDrawingActivity(data.elements && data.elements.length > 0);
+      
+      setHasDrawingActivity((data.elements && data.elements.length > 0) || !!data.canvasState);
     });
 
     // Listen for real-time drawing events
@@ -124,7 +193,7 @@ const Whiteboard = ({ meetingId, userId, userDisplayName }) => {
       console.log("Received drawing update:", data, "Current userId:", userId);
       setHasDrawingActivity(true); // Mark ongoing drawing activity
       if (data.userId !== userId) {
-        console.log("Handling remote drawing for:", data.userId);
+        console.log("Handling remote drawing for:", data.userId, "at position:", data.x, data.y);
         handleRemoteDrawing(data);
       } else {
         console.log("Ignoring own drawing event");
@@ -151,12 +220,49 @@ const Whiteboard = ({ meetingId, userId, userDisplayName }) => {
       console.log("New element added:", data);
     });
 
+    // Listen for canvas state updates
+    newSocket.on("canvas-state-updated", (data) => {
+      console.log("Canvas state updated by another user:", data.updatedBy);
+      if (data.updatedBy !== userId && data.imageData) {
+        console.log("Loading updated canvas state from another user");
+        loadCanvasFromImage(data.imageData);
+      }
+    });
+
+    // Listen for real-time canvas state broadcasts
+    newSocket.on("canvas-state-broadcast", (data) => {
+      console.log("Received canvas state broadcast from:", data.updatedBy);
+      if (data.updatedBy !== userId && data.imageData) {
+        console.log("Loading broadcast canvas state immediately");
+        loadCanvasFromImage(data.imageData, false); // Don't save to history for broadcasts
+        saveToLocalStorage(); // Update local storage with latest state
+      }
+    });
+
+    // Listen for canvas state save confirmation
+    newSocket.on("canvas-state-saved", (data) => {
+      console.log("Canvas state saved successfully:", data.message);
+    });
+
+    newSocket.on("canvas-state-save-failed", (data) => {
+      console.error("Canvas state save failed:", data.message);
+    });
+
     // Listen for errors
     newSocket.on("error", (data) => {
       console.error("Whiteboard error:", data.message);
     });
 
-    return () => newSocket.disconnect();
+    return () => {
+      // Save canvas state before disconnecting
+      if (canvasRef.current && hasDrawingActivity) {
+        const imageData = canvasRef.current.toDataURL();
+        newSocket.emit("save-canvas-state", { imageData });
+        // Also save to localStorage for immediate restoration
+        localStorage.setItem(storageKey, imageData);
+      }
+      newSocket.disconnect();
+    };
   }, [meetingId, userId]);
 
   /* ------------------------------------------------------------------
@@ -180,15 +286,26 @@ const Whiteboard = ({ meetingId, userId, userDisplayName }) => {
     // Mark whiteboard as ready
     setIsWhiteboardReady(true);
 
-    // Load pending elements if any
-    if (pendingElements && pendingElements.length > 0) {
-      setTimeout(() => {
-        loadWhiteboardElements(pendingElements);
-        setPendingElements(null);
-      }, 100);
-    } else {
-      // Only save initial blank state if no pending elements
-      saveCanvasState();
+    // Try to load from localStorage first (for view switching preservation)
+    const loadedFromLocal = loadFromLocalStorage();
+    
+    if (!loadedFromLocal) {
+      // Load pending content if any
+      if (pendingElements) {
+        setTimeout(() => {
+          if (pendingElements.canvasState) {
+            // Load saved canvas state
+            loadCanvasFromImage(pendingElements.canvasState);
+          } else if (pendingElements.length > 0) {
+            // Load individual elements
+            loadWhiteboardElements(pendingElements);
+          }
+          setPendingElements(null);
+        }, 100);
+      } else {
+        // Only save initial blank state if no pending content
+        saveCanvasState();
+      }
     }
   }, [pendingElements]);
 
@@ -329,12 +446,30 @@ const Whiteboard = ({ meetingId, userId, userDisplayName }) => {
       elementData,
       timestamp: Date.now()
     });
+
+    // Save canvas state to server for persistence across view switches
+    // Also immediately broadcast to all participants for real-time sync
+    const imageData = canvas.toDataURL();
+    setTimeout(() => {
+      saveCanvasToServer();
+      saveToLocalStorage(); // Also save locally for immediate view switching
+      
+      // Immediately broadcast canvas state to all participants
+      socket?.emit("broadcast-canvas-state", { 
+        imageData,
+        updatedBy: userId,
+        timestamp: Date.now()
+      });
+      console.log("Broadcasting canvas state to all participants");
+    }, 50); // Reduced delay for faster sync
   };
 
   /* ------------------------------------------------------------------
      4️⃣ Remote drawing handlers (from other users)
   ------------------------------------------------------------------ */
   const handleRemoteDrawingStart = (data) => {
+    if (!contextRef.current) return;
+    
     const ctx = contextRef.current;
     const { userId: remoteUserId, x, y, tool, color, brushSize } = data;
     
@@ -346,7 +481,7 @@ const Whiteboard = ({ meetingId, userId, userDisplayName }) => {
       [remoteUserId]: { x, y, tool, color, brushSize, isDrawing: true }
     }));
 
-    // Set up canvas for remote drawing
+    // Set up canvas for remote drawing with correct scaling
     ctx.save();
     ctx.globalCompositeOperation = tool === "eraser" ? "destination-out" : "source-over";
     // Enhance color visibility for remote drawings
@@ -360,10 +495,15 @@ const Whiteboard = ({ meetingId, userId, userDisplayName }) => {
   };
 
   const handleRemoteDrawing = (data) => {
+    if (!contextRef.current) return;
+    
     const ctx = contextRef.current;
     const { userId: remoteUserId, x, y, tool, color, brushSize } = data;
     
     console.log("Remote drawing update for user:", remoteUserId, "to position:", x, y);
+    
+    // Ensure we're working with the correct scaling
+    ctx.save();
     
     // Draw immediately without checking state (to avoid async issues)
     if (tool === "pen") {
@@ -372,6 +512,8 @@ const Whiteboard = ({ meetingId, userId, userDisplayName }) => {
       const enhancedColor = enhanceColorVisibility(color);
       ctx.strokeStyle = enhancedColor;
       ctx.lineWidth = Math.max(brushSize, 2); // Minimum thickness for visibility
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
       ctx.lineTo(x, y);
       ctx.stroke();
       ctx.beginPath();
@@ -383,6 +525,8 @@ const Whiteboard = ({ meetingId, userId, userDisplayName }) => {
       ctx.fill();
     }
 
+    ctx.restore();
+
     // Update remote drawer position
     setRemoteDrawers(prev => ({
       ...prev,
@@ -391,8 +535,10 @@ const Whiteboard = ({ meetingId, userId, userDisplayName }) => {
   };
 
   const handleRemoteDrawingEnd = (data) => {
+    if (!contextRef.current) return;
+    
     const ctx = contextRef.current;
-    const { userId: remoteUserId } = data;
+    const { userId: remoteUserId, elementData } = data;
     
     console.log("Ending remote drawing for user:", remoteUserId);
     
@@ -406,8 +552,15 @@ const Whiteboard = ({ meetingId, userId, userDisplayName }) => {
       return newDrawers;
     });
 
-    // Save canvas state after remote drawing
-    saveCanvasState();
+    // If the remote user provided canvas state, load it immediately for perfect sync
+    if (elementData && elementData.imageData && elementData.type === 'canvasState') {
+      console.log("Loading canvas state from remote drawing end");
+      loadCanvasFromImage(elementData.imageData, false); // Don't save to history for remote draws
+      saveToLocalStorage(); // Update local storage with the latest state
+    } else {
+      // Save canvas state after remote drawing
+      saveCanvasState();
+    }
   };
 
   const loadWhiteboardElements = (elements) => {
@@ -485,6 +638,42 @@ const Whiteboard = ({ meetingId, userId, userDisplayName }) => {
     img.src = imageData;
   };
 
+  const loadCanvasFromImage = (imageData, saveToHistory = true) => {
+    if (!canvasRef.current || !contextRef.current) return;
+    
+    const canvas = canvasRef.current;
+    const ctx = contextRef.current;
+    const img = new Image();
+    img.onload = () => {
+      // Save current transform
+      ctx.save();
+      // Reset transform to avoid scaling issues
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      // Clear the entire canvas at actual size
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      // Draw the image at actual canvas size
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      // Restore the transform
+      ctx.restore();
+      
+      // Only save to history if explicitly requested
+      if (saveToHistory) {
+        saveCanvasState();
+      }
+      // Always update localStorage with server data
+      saveToLocalStorage();
+    };
+    img.src = imageData;
+  };
+
+  const saveCanvasToServer = () => {
+    if (!socket || !canvasRef.current) return;
+    
+    const imageData = canvasRef.current.toDataURL();
+    console.log("Saving canvas state to server...");
+    socket.emit("save-canvas-state", { imageData });
+  };
+
   const undo = () => {
     if (!canDraw || historyStep <= 0) return;
     const prev = history[historyStep - 1];
@@ -513,58 +702,58 @@ const Whiteboard = ({ meetingId, userId, userDisplayName }) => {
      6️⃣ JSX UI with Tailwind CSS and Multi-User Support
   ------------------------------------------------------------------ */
   return (
-    <div className="w-full h-full flex flex-col items-center justify-center bg-gray-100 p-4">
-      {/* Multi-User Status Bar */}
-      <div className="w-full max-w-4xl mb-2 flex justify-between items-center">
-        <div className="text-sm">
+    <div className="w-full h-full flex flex-col bg-gray-50 p-2">
+      {/* Multi-User Status Bar - Compact */}
+      <div className="w-full mb-1 flex justify-between items-center px-2">
+        <div className="text-xs">
           {canDraw ? (
-            <span className="text-green-600 font-semibold bg-green-50 px-3 py-1 rounded-full border border-green-200">
-              ✓ You can draw • {userRole.charAt(0).toUpperCase() + userRole.slice(1)}
+            <span className="text-green-600 font-medium bg-green-50 px-2 py-1 rounded-md text-xs">
+              ✓ {userRole.charAt(0).toUpperCase() + userRole.slice(1)}
             </span>
           ) : (
-            <span className="text-blue-600 font-medium bg-blue-50 px-3 py-1 rounded-full border border-blue-200">
-              👁️ View-only mode • Watching live session
+            <span className="text-blue-600 font-medium bg-blue-50 px-2 py-1 rounded-md text-xs">
+              👁️ View-only
             </span>
           )}
         </div>
         
-        {/* Active Users Display */}
-        <div className="flex items-center space-x-2">
-          <span className="text-sm text-gray-600">Active users ({activeUsers.length}):</span>
+        {/* Active Users Display - Compact */}
+        <div className="flex items-center space-x-1">
+          <span className="text-xs text-gray-500">Users ({participantCount || Math.max(activeUsers.length, 1)}):</span>
           <div className="flex space-x-1">
-            {activeUsers.slice(0, 5).map((user, index) => (
+            {activeUsers.slice(0, 3).map((user, index) => (
               <div
                 key={user.userId}
-                className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-medium"
+                className="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-medium"
                 style={{ backgroundColor: getUserColor(user.userId) }}
                 title={user.displayName || `User ${user.userId.slice(-4)}`}
               >
                 {(user.displayName || user.userId).charAt(0).toUpperCase()}
               </div>
             ))}
-            {activeUsers.length > 5 && (
-              <div className="w-8 h-8 rounded-full bg-gray-400 flex items-center justify-center text-white text-xs">
-                +{activeUsers.length - 5}
+            {activeUsers.length > 3 && (
+              <div className="w-6 h-6 rounded-full bg-gray-400 flex items-center justify-center text-white text-xs">
+                +{activeUsers.length - 3}
               </div>
             )}
           </div>
         </div>
       </div>
 
-      {/* Toolbar (only for users who can draw) */}
+      {/* Compact Toolbar (only for users who can draw) */}
       {canDraw && (
-        <div className="flex flex-wrap items-center justify-between bg-white p-3 rounded-xl shadow-md mb-4 w-full max-w-4xl">
+        <div className="flex items-center justify-between bg-white/90 backdrop-blur px-3 py-2 rounded-lg shadow-sm mb-2 w-full">
           {/* Tool Selector */}
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-1">
             <button
-              className={`p-2 rounded ${tool === "pen" ? "bg-blue-500 text-white" : "bg-gray-200"}`}
+              className={`p-1.5 rounded text-sm ${tool === "pen" ? "bg-blue-500 text-white" : "bg-gray-100 hover:bg-gray-200"}`}
               onClick={() => setTool("pen")}
               title="Pen"
             >
               ✏️
             </button>
             <button
-              className={`p-2 rounded ${tool === "eraser" ? "bg-blue-500 text-white" : "bg-gray-200"}`}
+              className={`p-1.5 rounded text-sm ${tool === "eraser" ? "bg-blue-500 text-white" : "bg-gray-100 hover:bg-gray-200"}`}
               onClick={() => setTool("eraser")}
               title="Eraser"
             >
@@ -573,33 +762,34 @@ const Whiteboard = ({ meetingId, userId, userDisplayName }) => {
           </div>
 
           {/* Color Picker */}
-          <div className="flex items-center space-x-2">
-            <label className="text-sm text-gray-700">Color:</label>
+          <div className="flex items-center space-x-1">
             <input
               type="color"
               value={color}
               onChange={(e) => setColor(e.target.value)}
-              className="w-8 h-8 border rounded"
+              className="w-6 h-6 border rounded cursor-pointer"
+              title="Color"
             />
           </div>
 
           {/* Brush Size */}
-          <div className="flex items-center space-x-2">
-            <label className="text-sm text-gray-700">Size:</label>
+          <div className="flex items-center space-x-1">
             <input
               type="range"
               min="1"
-              max="50"
+              max="20"
               value={brushSize}
               onChange={(e) => setBrushSize(Number(e.target.value))}
+              className="w-16"
+              title="Brush Size"
             />
-            <span className="text-sm">{brushSize}px</span>
+            <span className="text-xs text-gray-600 w-6">{brushSize}</span>
           </div>
 
           {/* Actions */}
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-1">
             <button
-              className="p-2 bg-gray-200 rounded hover:bg-gray-300"
+              className="p-1.5 bg-gray-100 rounded hover:bg-gray-200 text-sm disabled:opacity-50"
               onClick={undo}
               disabled={historyStep <= 0}
               title="Undo"
@@ -607,7 +797,7 @@ const Whiteboard = ({ meetingId, userId, userDisplayName }) => {
               ↶
             </button>
             <button
-              className="p-2 bg-gray-200 rounded hover:bg-gray-300"
+              className="p-1.5 bg-gray-100 rounded hover:bg-gray-200 text-sm disabled:opacity-50"
               onClick={redo}
               disabled={historyStep >= history.length - 1}
               title="Redo"
@@ -615,14 +805,14 @@ const Whiteboard = ({ meetingId, userId, userDisplayName }) => {
               ↷
             </button>
             <button
-              className="p-2 bg-red-500 text-white rounded hover:bg-red-600"
+              className="p-1.5 bg-red-500 text-white rounded hover:bg-red-600 text-sm"
               onClick={() => clearCanvas(true)}
               title="Clear"
             >
               🗑️
             </button>
             <button
-              className="p-2 bg-green-500 text-white rounded hover:bg-green-600"
+              className="p-1.5 bg-green-500 text-white rounded hover:bg-green-600 text-sm"
               onClick={downloadCanvas}
               title="Download"
             >
@@ -632,8 +822,8 @@ const Whiteboard = ({ meetingId, userId, userDisplayName }) => {
         </div>
       )}
 
-      {/* Canvas Area with User Cursors */}
-      <div className="relative w-full max-w-4xl h-[600px] bg-white rounded-xl shadow-lg overflow-hidden">
+      {/* Canvas Area with User Cursors - Larger Size */}
+      <div className="relative w-full h-[calc(100vh-120px)] bg-white rounded-lg shadow-lg overflow-hidden">
         <canvas
           ref={canvasRef}
           className="w-full h-full cursor-crosshair"
@@ -664,27 +854,16 @@ const Whiteboard = ({ meetingId, userId, userDisplayName }) => {
         
         {/* View Only Overlay - Hide when there's drawing activity */}
         {!canDraw && !hasDrawingActivity && (
-          <div className="absolute inset-0 flex items-center justify-center bg-white/60 text-gray-700 font-medium text-lg pointer-events-none z-10">
-            <div className="text-center p-6 bg-white rounded-lg shadow-lg border-2 border-gray-200">
-              <div className="text-xl mb-2">👀 View Only Mode</div>
-              <div className="text-base text-gray-600 mb-3">Only the host can draw on this whiteboard</div>
-              <div className="text-sm text-gray-500">You'll see real-time drawings when someone starts drawing</div>
+          <div className="absolute inset-0 flex items-center justify-center bg-white/40 pointer-events-none z-10">
+            <div className="text-center p-4 bg-white/95 backdrop-blur rounded-lg shadow-md border border-gray-200 max-w-sm">
+              <div className="text-lg mb-2">👀 View Only</div>
+              <div className="text-sm text-gray-600 mb-2">Only host can draw</div>
               <button 
                 onClick={() => setHasDrawingActivity(true)}
-                className="mt-3 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm"
+                className="mt-2 px-3 py-1.5 bg-blue-500 text-white rounded text-sm hover:bg-blue-600 pointer-events-auto"
               >
-                Hide this overlay
+                Hide overlay
               </button>
-            </div>
-          </div>
-        )}
-        
-        {/* Subtle indicator when viewing drawings */}
-        {!canDraw && hasDrawingActivity && (
-          <div className="absolute top-2 left-2 bg-blue-100 border-l-4 border-blue-500 text-blue-700 p-2 rounded text-sm pointer-events-none z-20">
-            <div className="flex items-center">
-              <span className="mr-2">👁️</span>
-              <span>Viewing live whiteboard</span>
             </div>
           </div>
         )}
