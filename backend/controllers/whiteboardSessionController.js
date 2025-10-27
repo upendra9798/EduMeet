@@ -62,7 +62,7 @@ export const joinSession = async (req, res) => {
                     joinedAt: participant.joinedAt
                 },
                 activeParticipants: session.participants ? session.participants.filter(p => p.isActive).length : 0,
-                canDraw: role === 'host' || role === 'admin' || whiteboard.permissions.publicDrawing
+                canDraw: role === 'host' // Only host can draw
             }
         });
 

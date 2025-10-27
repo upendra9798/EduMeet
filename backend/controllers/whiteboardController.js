@@ -53,9 +53,9 @@ export const createWhiteboard = async (req, res) => {
             canvasHeight: canvasHeight || 1080,
             backgroundColor: backgroundColor || '#ffffff',
             permissions: {
-                allowedDrawers: [userId],
-                restrictToHost: false, // Allow all participants to draw
-                publicDrawing: true // Enable multi-user drawing by default
+                allowedDrawers: [userId], // Only host initially
+                restrictToHost: true, // Restrict drawing to host only
+                publicDrawing: false // Disable multi-user drawing by default
             },
             lastModified: {
                 timestamp: new Date(),

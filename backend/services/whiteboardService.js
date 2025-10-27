@@ -254,17 +254,8 @@ class WhiteboardService {
                 return { canDraw: false, reason: 'Drawing restricted to meeting host' };
             }
 
-            // Check if public drawing is enabled
-            if (whiteboard.permissions.publicDrawing) {
-                return { canDraw: true, role: 'participant' };
-            }
-
-            // Check if user is in allowed drawers list
-            if (whiteboard.permissions.allowedDrawers.includes(userId)) {
-                return { canDraw: true, role: 'admin' };
-            }
-
-            return { canDraw: false, reason: 'Drawing permission not granted' };
+            // Only host can draw - override other permission checks
+            return { canDraw: false, reason: 'Only meeting host can draw on this whiteboard' };
         } catch (error) {
             throw new Error(`Failed to check drawing permission: ${error.message}`);
         }

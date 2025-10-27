@@ -1,6 +1,6 @@
 import {io} from "socket.io-client"
 
-export const socket = io("http://localhost:5001",{//This line creates a socket connection to your backend server.
+export const socket = io("http://172.23.247.244:5173",{//This line creates a socket connection to your backend server.
     transports: ["websocket"],
 })//This line creates a socket connection to your backend server.
 

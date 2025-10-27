@@ -39,8 +39,12 @@ const MeetingRoom = ({ user }) => {
   const displayName = searchParams.get("displayName") || user.username;
   console.log('MeetingRoom: Display name:', displayName);
   
+  // For testing: Generate unique user ID if multiple tabs/windows
+  const testUserId = searchParams.get("testUserId") || user.id;
+  
   const displayUser = {
     ...user,
+    id: testUserId, // Use test user ID if provided
     username: displayName,
   };
   
@@ -130,7 +134,7 @@ const MeetingRoom = ({ user }) => {
           "display name:",
           displayUser.username
         );
-        MeetingSocket.connect(user.id);
+        MeetingSocket.connect(displayUser.id);
         setupSocketListeners();
         console.log("Joining meeting:", meetingId);
         MeetingSocket.joinMeeting(meetingId, displayUser.username);
@@ -354,7 +358,7 @@ const MeetingRoom = ({ user }) => {
         id: Date.now(),
         text: newMessage.trim(),
         sender: displayUser.username,
-        senderId: user.id,
+        senderId: displayUser.id,
         timestamp: new Date(),
         isOwn: true,
       };
@@ -572,7 +576,7 @@ const MeetingRoom = ({ user }) => {
             <div className="h-full">
               <VideoChat
                 meetingId={meetingId}
-                userId={user.id}
+                userId={displayUser.id}
                 localStream={localStream}
                 isMuted={isMuted}
                 isVideoOff={isVideoOff}
@@ -618,7 +622,7 @@ const MeetingRoom = ({ user }) => {
             <div className="h-full">
               <Whiteboard
                 meetingId={meetingId}
-                userId={user.id}
+                userId={displayUser.id}
                 userDisplayName={displayUser.username}
                 participantCount={participants.length + 1}
               />
@@ -630,7 +634,7 @@ const MeetingRoom = ({ user }) => {
               <div className="bg-black rounded-lg overflow-hidden relative">
                 <VideoChat
                   meetingId={meetingId}
-                  userId={user.id}
+                  userId={displayUser.id}
                   localStream={localStream}
                   isMuted={isMuted}
                   isVideoOff={isVideoOff}

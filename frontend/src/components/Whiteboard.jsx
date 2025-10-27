@@ -253,6 +253,19 @@ const Whiteboard = ({ meetingId, userId, userDisplayName, participantCount }) =>
       console.error("Whiteboard error:", data.message);
     });
 
+    // Listen for permission denials
+    newSocket.on("drawing-denied", (data) => {
+      console.log("Drawing permission denied:", data.message);
+      // Show a user-friendly message (you can enhance this with a toast notification)
+      alert(data.message || "You don't have permission to draw on this whiteboard");
+    });
+
+    newSocket.on("action-denied", (data) => {
+      console.log("Action permission denied:", data.message);
+      // Show a user-friendly message (you can enhance this with a toast notification)
+      alert(data.message || "You don't have permission to perform this action");
+    });
+
     return () => {
       // Save canvas state before disconnecting
       if (canvasRef.current && hasDrawingActivity) {
@@ -708,11 +721,11 @@ const Whiteboard = ({ meetingId, userId, userDisplayName, participantCount }) =>
         <div className="text-xs">
           {canDraw ? (
             <span className="text-green-600 font-medium bg-green-50 px-2 py-1 rounded-md text-xs">
-              ✓ {userRole.charAt(0).toUpperCase() + userRole.slice(1)}
+              ✓ Host - Can Draw
             </span>
           ) : (
-            <span className="text-blue-600 font-medium bg-blue-50 px-2 py-1 rounded-md text-xs">
-              👁️ View-only
+            <span className="text-orange-600 font-medium bg-orange-50 px-2 py-1 rounded-md text-xs">
+              👁️ Participant - View Only
             </span>
           )}
         </div>

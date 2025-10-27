@@ -80,14 +80,12 @@ const whiteboardSocketHandler = (io) => {
                 
                 // Check additional permissions if whiteboard exists
                 if (whiteboard && whiteboard.permissions) {
-                    if (whiteboard.permissions.allowedDrawers.includes(userId)) {
-                        role = 'admin';
-                        canDraw = true;
-                    } else if (whiteboard.permissions.publicDrawing) {
+                    // Only host can draw - restrictToHost should be true by default
+                    if (isHost) {
                         canDraw = true;
                     } else {
-                        // Default for participants - allow drawing unless restricted
-                        canDraw = !whiteboard.permissions.restrictToHost;
+                        // Participants cannot draw when restrictToHost is true (default)
+                        canDraw = false;
                     }
                 }
 
@@ -191,9 +189,16 @@ const whiteboardSocketHandler = (io) => {
                     return;
                 }
 
+                // Check if user has permission to draw (host only)
+                if (!isHost) {
+                    console.log(`Drawing permission denied for user ${userId} - not host`);
+                    socket.emit('drawing-denied', { message: 'Only host can draw' });
+                    return;
+                }
+
                 console.log(`Drawing started by user ${userId}:`, data);
 
-                // Broadcast drawing start to room (simplified - no permission check for testing)
+                // Broadcast drawing start to room
                 const roomName = `whiteboard-${currentWhiteboardId}`;
                 socket.to(roomName).emit('drawing-start', {
                     ...data,
@@ -224,9 +229,16 @@ const whiteboardSocketHandler = (io) => {
                     return;
                 }
 
+                // Check if user has permission to draw (host only)
+                if (!isHost) {
+                    console.log(`Drawing permission denied for user ${userId} - not host`);
+                    socket.emit('drawing-denied', { message: 'Only host can draw' });
+                    return;
+                }
+
                 console.log(`Drawing update by user ${userId}:`, data);
 
-                // Broadcast drawing data to room (simplified - no participant check for testing)
+                // Broadcast drawing data to room
                 const roomName = `whiteboard-${currentWhiteboardId}`;
                 socket.to(roomName).emit('drawing', {
                     ...data,
@@ -248,9 +260,16 @@ const whiteboardSocketHandler = (io) => {
                     return;
                 }
 
+                // Check if user has permission to draw (host only)
+                if (!isHost) {
+                    console.log(`Drawing permission denied for user ${userId} - not host`);
+                    socket.emit('drawing-denied', { message: 'Only host can draw' });
+                    return;
+                }
+
                 console.log(`Drawing ended by user ${userId}:`, data);
 
-                // Broadcast drawing end to room (simplified - no participant check for testing)
+                // Broadcast drawing end to room
                 const roomName = `whiteboard-${currentWhiteboardId}`;
                 socket.to(roomName).emit('drawing-end', {
                     ...data,
@@ -443,6 +462,13 @@ const whiteboardSocketHandler = (io) => {
         socket.on('save-canvas-state', async (data) => {
             try {
                 if (!currentWhiteboardId || !data.imageData) return;
+
+                // Check if user has permission to save canvas (host only)
+                if (!isHost) {
+                    console.log(`Canvas save permission denied for user ${userId} - not host`);
+                    socket.emit('action-denied', { message: 'Only host can save canvas' });
+                    return;
+                }
 
                 console.log(`Saving canvas state for whiteboard ${currentWhiteboardId} by user ${userId}`);
 

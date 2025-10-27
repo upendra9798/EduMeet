@@ -2,6 +2,74 @@ import React, { useEffect, useRef, useState } from "react";
 import MeetingSocket from "../services/meetingSocket";
 import { v4 as uuidv4 } from "uuid";
 
+// Video Tile Component for individual participants
+const VideoTile = ({ participant, isLocal = false, isVideoOff = false }) => {
+  const videoRef = useRef(null);
+  
+  useEffect(() => {
+    if (videoRef.current && participant.stream) {
+      videoRef.current.srcObject = participant.stream;
+      
+      // For remote streams, ensure audio is enabled
+      if (!isLocal) {
+        const audioTracks = participant.stream.getAudioTracks();
+        audioTracks.forEach(track => {
+          track.enabled = true;
+          console.log('VideoChat: Enabled audio track for', participant.displayName);
+        });
+      }
+      
+      // Auto-play the video (this is required for both video and audio)
+      videoRef.current.play().catch(err => {
+        console.log('Auto-play prevented (normal behavior):', err.message);
+      });
+    }
+  }, [participant.stream, isLocal, participant.displayName]);
+
+  return (
+    <div className="relative bg-gray-800 rounded-xl shadow-lg overflow-hidden aspect-video min-w-0 flex-1">
+      <video
+        ref={videoRef}
+        autoPlay
+        muted={isLocal} // Only mute local video to prevent echo, remote videos should play audio
+        playsInline
+        controls={false}
+        className={`w-full h-full object-cover transition-opacity duration-300 ${
+          isVideoOff ? 'opacity-0' : 'opacity-100'
+        }`}
+      />
+      
+      {/* Participant Name Overlay */}
+      <div className="absolute bottom-2 left-2 bg-black/50 text-white px-2 py-1 rounded text-sm font-medium">
+        {participant.displayName} {isLocal && "(You)"}
+      </div>
+      
+      {/* Video Off Overlay */}
+      {isVideoOff && (
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-800">
+          <div className="text-center text-white">
+            <div className="w-16 h-16 bg-gray-600 rounded-full flex items-center justify-center mx-auto mb-3">
+              <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-6-3a2 2 0 11-4 0 2 2 0 014 0zm-2 4a5 5 0 00-4.546 2.916A5.986 5.986 0 0010 16a5.986 5.986 0 004.546-2.084A5 5 0 0010 11z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <p className="text-sm text-gray-300">Camera is off</p>
+          </div>
+        </div>
+      )}
+      
+      {/* Audio Indicator for Remote Participants */}
+      {!isLocal && participant.stream && (
+        <div className="absolute top-2 right-2 bg-green-500 text-white p-1 rounded-full animate-pulse">
+          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217z" clipRule="evenodd" />
+          </svg>
+        </div>
+      )}
+    </div>
+  );
+};
+
 /**
  * 🎥 VideoChat Component
  * Handles video streaming for existing meeting rooms.
@@ -9,9 +77,22 @@ import { v4 as uuidv4 } from "uuid";
  */
 export default function VideoChat({ meetingId, userId, localStream, isMuted, isVideoOff }) {
   const [joined, setJoined] = useState(false);
+  const [remoteParticipants, setRemoteParticipants] = useState({}); // Track remote participants and their streams
   const localVideoRef = useRef(null);
   const localStreamRef = useRef(null);
   const pcRef = useRef({}); // Each user gets its own RTCPeerConnection instance
+
+  // Debug logging
+  useEffect(() => {
+    console.log('VideoChat: Component state updated:', {
+      joined,
+      remoteParticipantsCount: Object.keys(remoteParticipants).length,
+      remoteParticipants: Object.keys(remoteParticipants),
+      hasLocalStream: !!localStream,
+      meetingId,
+      userId
+    });
+  }, [joined, remoteParticipants, localStream, meetingId, userId]);
 
   /** 🚪 Auto-join the meeting room */
   useEffect(() => {
@@ -77,37 +158,89 @@ export default function VideoChat({ meetingId, userId, localStream, isMuted, isV
     }
   };
 
-  // Effect to re-assign stream when video ref changes (component remount)
+  // Keep the local stream ref updated when props change
   useEffect(() => {
-    const videoElement = localVideoRef.current;
-    if (videoElement && localStreamRef.current) {
-      console.log('VideoChat: Video element ready, assigning stream');
-      videoElement.srcObject = localStreamRef.current;
-      
-      // Auto-play the video
-      videoElement.play().catch(err => {
-        console.log('VideoChat: Auto-play prevented (normal behavior):', err.message);
-      });
+    if (localStream) {
+      localStreamRef.current = localStream;
+      console.log('VideoChat: Local stream updated in ref');
     }
-  }, [localVideoRef.current]);
+  }, [localStream]);
+
+  // Ensure audio context is resumed for all remote streams
+  useEffect(() => {
+    const resumeAudioContext = async () => {
+      try {
+        // Modern browsers require user interaction to resume audio context
+        // This will be called after user joins the meeting (which is a user interaction)
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioContext.state === 'suspended') {
+          await audioContext.resume();
+          console.log('VideoChat: Audio context resumed for remote audio');
+        }
+        audioContext.close();
+      } catch (error) {
+        console.log('VideoChat: Audio context handling not needed/supported:', error.message);
+      }
+    };
+
+    if (Object.keys(remoteParticipants).length > 0) {
+      resumeAudioContext();
+    }
+  }, [remoteParticipants]);
 
   /** 🔗 WebRTC signaling logic via MeetingSocket */
   useEffect(() => {
     // Listen for existing participants when we join
     MeetingSocket.on("meeting-joined", async (data) => {
-      console.log('VideoChat: Meeting joined, existing participants:', data.existingParticipants);
+      console.log('VideoChat: Meeting joined event received:', data);
+      console.log('VideoChat: Existing participants:', data.existingParticipants);
+      
       // Create peer connections with existing participants regardless of local stream
-      if (data.existingParticipants) {
+      if (data.existingParticipants && data.existingParticipants.length > 0) {
+        console.log(`VideoChat: Found ${data.existingParticipants.length} existing participants`);
+        
         for (const participant of data.existingParticipants) {
-          console.log('VideoChat: Creating connection with existing participant:', participant.socketId);
+          console.log('VideoChat: Processing existing participant:', participant);
+          
+          // Initialize participant in state before creating peer connection
+          setRemoteParticipants(prev => {
+            console.log('VideoChat: Adding existing participant to state:', participant.socketId);
+            return {
+              ...prev,
+              [participant.socketId]: {
+                socketId: participant.socketId,
+                displayName: participant.displayName || `Participant ${participant.socketId.slice(-4)}`,
+                stream: null // Will be set when ontrack fires
+              }
+            };
+          });
+          
+          console.log('VideoChat: Creating peer connection with existing participant:', participant.socketId);
           await createPeerConnection(participant.socketId, true);
         }
+      } else {
+        console.log('VideoChat: No existing participants found');
       }
     });
 
     // A new user joins
     MeetingSocket.on("user-joined", async (participant) => {
-      console.log('VideoChat: New user joined for WebRTC:', participant);
+      console.log('VideoChat: New user joined event received:', participant);
+      
+      // Initialize participant in state before creating peer connection
+      setRemoteParticipants(prev => {
+        console.log('VideoChat: Adding new participant to state:', participant.socketId);
+        return {
+          ...prev,
+          [participant.socketId]: {
+            socketId: participant.socketId,
+            displayName: participant.displayName || `Participant ${participant.socketId.slice(-4)}`,
+            stream: null // Will be set when ontrack fires
+          }
+        };
+      });
+      
+      console.log('VideoChat: Creating peer connection with new participant:', participant.socketId);
       await createPeerConnection(participant.socketId, false);
     });
 
@@ -157,16 +290,21 @@ export default function VideoChat({ meetingId, userId, localStream, isMuted, isV
     // When a user leaves
     MeetingSocket.on("user-left", (data) => {
       console.log('VideoChat: User left:', data);
-      const video = document.getElementById(data.socketId);
-      if (video) {
-        video.remove();
-        console.log('VideoChat: Removed video element for:', data.socketId);
-      }
+      
+      // Close peer connection
       if (pcRef.current[data.socketId]) {
         pcRef.current[data.socketId].close();
         delete pcRef.current[data.socketId];
         console.log('VideoChat: Closed peer connection for:', data.socketId);
       }
+      
+      // Remove participant from React state
+      setRemoteParticipants(prev => {
+        const updated = { ...prev };
+        delete updated[data.socketId];
+        console.log('VideoChat: Removed participant from state:', data.socketId);
+        return updated;
+      });
     });
 
     return () => {
@@ -185,7 +323,11 @@ export default function VideoChat({ meetingId, userId, localStream, isMuted, isV
       console.log(`VideoChat: Creating peer connection with ${id}, isInitiator: ${isInitiator}, hasLocalStream: ${!!localStreamRef.current}`);
       
       const pc = new RTCPeerConnection({
-        iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+        iceServers: [
+          { urls: "stun:stun.l.google.com:19302" },
+          { urls: "stun:stun1.l.google.com:19302" }
+        ],
+        iceCandidatePoolSize: 10
       });
 
       // Send ICE candidates to the other peer
@@ -199,29 +341,20 @@ export default function VideoChat({ meetingId, userId, localStream, isMuted, isV
       // When remote stream arrives - this works regardless of local stream
       pc.ontrack = (event) => {
         console.log('VideoChat: Received remote stream from:', id);
-        const existingVideo = document.getElementById(id);
-        if (existingVideo) {
-          console.log('VideoChat: Updating existing video element');
-          existingVideo.srcObject = event.streams[0];
-          return;
-        }
-
-        const video = document.createElement("video");
-        video.id = id;
-        video.srcObject = event.streams[0];
-        video.autoplay = true;
-        video.playsInline = true;
-        video.muted = false; // Don't mute remote streams
-        video.className = 
-          "w-full max-w-lg h-64 md:h-80 border-2 border-blue-400 rounded-xl shadow-lg object-cover";
+        const [remoteStream] = event.streams;
         
-        const videoGrid = document.getElementById("video-grid");
-        if (videoGrid) {
-          videoGrid.appendChild(video);
-          console.log('VideoChat: Added remote video element for:', id);
-        } else {
-          console.error('VideoChat: video-grid not found!');
-        }
+        // Update existing participant with stream, preserving display name
+        setRemoteParticipants(prev => ({
+          ...prev,
+          [id]: {
+            ...prev[id],
+            socketId: id,
+            stream: remoteStream,
+            displayName: prev[id]?.displayName || `Participant ${id.slice(-4)}`
+          }
+        }));
+        
+        console.log('VideoChat: Updated participant with stream:', id);
       };
 
       // Add local tracks to the connection ONLY if available
@@ -242,7 +375,8 @@ export default function VideoChat({ meetingId, userId, localStream, isMuted, isV
         console.log('VideoChat: Creating offer for:', id);
         const offer = await pc.createOffer({
           offerToReceiveAudio: true,
-          offerToReceiveVideo: true
+          offerToReceiveVideo: true,
+          voiceActivityDetection: false // Helps with audio quality
         });
         await pc.setLocalDescription(offer);
         MeetingSocket.emit("offer", { to: id, sdp: offer });
@@ -267,39 +401,76 @@ export default function VideoChat({ meetingId, userId, localStream, isMuted, isV
           <p className="text-gray-400">Setting up your camera and microphone</p>
         </div>
       ) : joined ? (
-        // 🔹 Meeting Screen
-        <div className="w-full h-full">
-          <div
-            id="video-grid"
-            className="flex flex-wrap justify-center gap-4 h-full items-center"
-          >
-            {/* Local video - only show if we have a stream */}
-            {localStream && (
-              <div className="relative w-full max-w-md h-64 bg-gray-800 rounded-xl shadow-lg overflow-hidden">
-                <video
-                  ref={localVideoRef}
-                  autoPlay
-                  muted
-                  playsInline
-                  className={`w-full h-full object-cover transition-opacity duration-300 ${
-                    isVideoOff ? 'opacity-0' : 'opacity-100'
-                  }`}
-                />
-                {isVideoOff && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-gray-800">
-                    <div className="text-center text-white">
-                      <div className="w-16 h-16 bg-gray-600 rounded-full flex items-center justify-center mx-auto mb-3">
-                        <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-6-3a2 2 0 11-4 0 2 2 0 014 0zm-2 4a5 5 0 00-4.546 2.916A5.986 5.986 0 0010 16a5.986 5.986 0 004.546-2.084A5 5 0 0010 11z" clipRule="evenodd" />
-                        </svg>
-                      </div>
-                      <p className="text-sm text-gray-300">Camera is off</p>
-                    </div>
+        // 🔹 Meeting Screen with Video Grid
+        <div className="w-full h-full p-4">
+          {/* Dynamic Video Grid */}
+          <div className={`grid gap-4 h-full ${
+            Object.keys(remoteParticipants).length === 0 ? 'grid-cols-1' :
+            Object.keys(remoteParticipants).length === 1 ? 'grid-cols-1 md:grid-cols-2' :
+            Object.keys(remoteParticipants).length <= 3 ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3' :
+            'grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
+          }`}>
+            
+            {/* Local Video - Always show, even without stream */}
+            <VideoTile
+              participant={{
+                displayName: "You",
+                stream: localStream
+              }}
+              isLocal={true}
+              isVideoOff={isVideoOff || !localStream}
+            />
+            
+            {/* Remote Participants */}
+            {Object.values(remoteParticipants).map(participant => (
+              <VideoTile
+                key={participant.socketId}
+                participant={participant}
+                isLocal={false}
+                isVideoOff={false}
+              />
+            ))}
+            
+            {/* Debug Info */}
+            <div className="col-span-full">
+              <div className="bg-blue-900/50 text-blue-100 p-3 rounded-lg text-sm">
+                <p><strong>Debug Info:</strong></p>
+                <p>Joined: {joined ? 'Yes' : 'No'}</p>
+                <p>Remote Participants: {Object.keys(remoteParticipants).length}</p>
+                <p>Participants: {Object.keys(remoteParticipants).join(', ') || 'None'}</p>
+                <p>Local Stream: {localStream ? 'Available' : 'Not available'}</p>
+                <p>Meeting ID: {meetingId}</p>
+                <p>User ID: {userId}</p>
+                <button 
+                  onClick={() => {
+                    console.log('Manual debug - Current state:', {
+                      joined,
+                      remoteParticipants,
+                      localStream: !!localStream,
+                      peerConnections: Object.keys(pcRef.current)
+                    });
+                  }}
+                  className="mt-2 px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-white text-sm"
+                >
+                  Log Debug Info
+                </button>
+              </div>
+            </div>
+
+            {/* Empty State when no participants */}
+            {Object.keys(remoteParticipants).length === 0 && (
+              <div className="flex items-center justify-center text-gray-400 text-center p-8">
+                <div>
+                  <div className="w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M18 13V5a2 2 0 00-2-2H4a2 2 0 00-2 2v8a2 2 0 002 2h3l3 3 3-3h3a2 2 0 002-2zM5 7a1 1 0 011-1h8a1 1 0 110 2H6a1 1 0 01-1-1zm1 3a1 1 0 100 2h3a1 1 0 100-2H6z" clipRule="evenodd" />
+                    </svg>
                   </div>
-                )}
+                  <h3 className="text-lg font-semibold mb-2">Waiting for others to join</h3>
+                  <p className="text-sm">Share the meeting ID with participants to get started</p>
+                </div>
               </div>
             )}
-            {/* Remote videos will be dynamically added here via createPeerConnection */}
           </div>
         </div>
       ) : (

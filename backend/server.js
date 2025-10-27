@@ -58,10 +58,14 @@ app.use('/api/meetings', meetingRoutes)
 // app.use('/api/auth', authRoutes)
 // app.use('/api/users', userRoutes)
 
-server.listen(PORT, () => {
-    connectMongoDB()
-    console.log(`Server is running on port ${PORT}`)
-})
+// server.listen(PORT, () => {
+//     connectMongoDB()
+//     console.log(`Server is running on port ${PORT}`)
+// })
+server.listen(PORT, "0.0.0.0", () => {
+  console.log(`Server is running on http://172.23.247.244: ${PORT}`);
+});
+
 //Starts the HTTP + Socket.IO server on port 5000.
 
 
