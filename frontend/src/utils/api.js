@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-// Get the current host for mobile compatibility
+// Get the API URL
 const getApiUrl = () => {
   // If environment variable is set, use it (production)
   if (import.meta.env.VITE_API_URL) {
@@ -12,8 +12,8 @@ const getApiUrl = () => {
   const protocol = window.location.protocol;
   
   if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    // Development - use network IP for mobile compatibility
-    return 'http://172.23.247.244:5001/api';
+    // Development - use localhost
+    return 'http://localhost:5001/api';
   } else if (hostname.includes('your-domain.com')) {
     // Production - use HTTPS API endpoint
     return 'https://your-domain.com/api';
@@ -27,7 +27,7 @@ const getApiUrl = () => {
 // Create axios instance with default config
 const api = axios.create({
   baseURL: getApiUrl(),
-  timeout: 30000, // Increased timeout for mobile networks
+  timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
@@ -85,7 +85,7 @@ api.interceptors.response.use(
       } : 'No config'
     });
     
-    // Handle network errors specifically for mobile
+    // Handle network errors
     if (error.code === 'NETWORK_ERROR' || error.message === 'Network Error') {
       console.error('Network error detected - possibly CORS or connection issue');
     }

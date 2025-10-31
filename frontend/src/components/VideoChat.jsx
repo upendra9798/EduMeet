@@ -369,7 +369,7 @@ export default function VideoChat({ meetingId, userId, localStream, isMuted, isV
         { urls: "stun:stun.cloudflare.com:3478" },
         { urls: "stun:stun.nextcloud.com:443" }
         
-        // TODO: Add TURN server for production (required for mobile networks)
+        // TODO: Add TURN server for production (required for NAT traversal)
         // { 
         //   urls: "turn:your-turn-server.com:3478",
         //   username: "your-username",

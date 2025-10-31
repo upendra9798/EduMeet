@@ -9,7 +9,7 @@ export default defineConfig({
     tailwindcss(),
   ],
   server: {
-    host: '0.0.0.0', // Allow external connections
-    port: 5174,      // Specify port
+    host: 'localhost', // Localhost only
+    port: 5174,        // Specify port
   }
 })

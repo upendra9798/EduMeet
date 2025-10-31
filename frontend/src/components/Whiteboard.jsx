@@ -77,7 +77,7 @@ const Whiteboard = ({ meetingId, userId, userDisplayName, participantCount }) =>
      1️⃣ Setup Socket.io connection and event listeners
   ------------------------------------------------------------------ */
   useEffect(() => {
-    // Get mobile-compatible socket URL
+    // Get whiteboard socket URL
     const getWhiteboardSocketUrl = () => {
       if (import.meta.env.VITE_SOCKET_URL) {
         return `${import.meta.env.VITE_SOCKET_URL}/whiteboard`;
@@ -85,13 +85,13 @@ const Whiteboard = ({ meetingId, userId, userDisplayName, participantCount }) =>
       
       const hostname = window.location.hostname;
       if (hostname === 'localhost' || hostname === '127.0.0.1') {
-        return 'http://172.23.247.244:5001/whiteboard';
+        return 'http://localhost:5001/whiteboard';
       } else {
         return `${window.location.protocol}//${hostname}:5001/whiteboard`;
       }
     };
 
-    // Connect to whiteboard namespace with mobile support
+    // Connect to whiteboard namespace
     const newSocket = io(getWhiteboardSocketUrl(), {
       transports: ["websocket", "polling"], // Mobile fallback
       timeout: 20000,

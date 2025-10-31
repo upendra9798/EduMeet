@@ -14,7 +14,6 @@ import {
 } from "lucide-react";
 import VideoChat from "../components/VideoChat";
 import Whiteboard from "../components/Whiteboard";
-import MobileMediaTroubleshoot from "../components/MobileMediaTroubleshoot";
 import MeetingService from "../services/meetingService";
 import MeetingSocket from "../services/meetingSocket";
 import WhiteboardService from "../services/whiteboardService";
@@ -272,12 +271,12 @@ const MeetingRoom = ({ user }) => {
 
 
 
-  // Mobile-friendly media access with progressive fallbacks
+  // Media access with progressive fallbacks
   const requestMediaAccess = async () => {
-    console.log('MeetingRoom: Manual media access requested...');
+    console.log('MeetingRoom: Media access requested...');
     setShowMediaPrompt(true);
 
-    // Check if mediaDevices is supported (required for mobile)
+    // Check if mediaDevices is supported
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       setShowMediaPrompt(false);
       alert("Your browser doesn't support camera/microphone access. Please use Chrome, Firefox, or Safari.");
@@ -286,13 +285,12 @@ const MeetingRoom = ({ user }) => {
 
     // Progressive fallback constraints (from most ideal to most basic)
     const constraints = [
-      // Attempt 1: Mobile-optimized constraints
+      // Attempt 1: High quality constraints
       {
         video: {
           width: { ideal: 640, max: 1280 },
           height: { ideal: 480, max: 720 },
-          frameRate: { ideal: 15, max: 30 },
-          facingMode: 'user'
+          frameRate: { ideal: 15, max: 30 }
         },
         audio: {
           echoCancellation: true,
@@ -348,30 +346,8 @@ const MeetingRoom = ({ user }) => {
           setShowMediaPrompt(false);
           setMediaAccessFailed(true);
           
-          // Check if we're on mobile to show appropriate help
-          const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-          
-          if (isMobile || window.innerWidth <= 768) {
-            // Show mobile-specific troubleshooting
-            setShowTroubleshoot(true);
-          } else {
-            // Show desktop alert
-            let errorMessage = "Unable to access camera/microphone. ";
-            if (error.name === 'NotAllowedError') {
-              errorMessage += "Permission denied. Please:\n";
-              errorMessage += "1. Click the camera/microphone icon in your browser's address bar\n";
-              errorMessage += "2. Select 'Allow' for both camera and microphone\n";
-              errorMessage += "3. Refresh this page and try again";
-            } else if (error.name === 'NotFoundError') {
-              errorMessage += "No camera/microphone found. Please check your device has working camera and microphone.";
-            } else if (error.name === 'NotReadableError') {
-              errorMessage += "Camera/microphone is being used by another application. Please close other apps and try again.";
-            } else {
-              errorMessage += `Error: ${error.message}`;
-            }
-            
-            alert(errorMessage);
-          }
+          // Show troubleshooting dialog
+          setShowTroubleshoot(true);
           return;
         }
         
@@ -724,14 +700,28 @@ const MeetingRoom = ({ user }) => {
                 </div>
               )}
 
-              {/* Mobile-friendly troubleshooting component when media access fails */}
+              {/* Camera access error message */}
               {showTroubleshoot && (
                 <div className="absolute inset-0 bg-black/80 backdrop-blur-sm z-20 flex items-center justify-center p-4">
-                  <div className="w-full max-w-md">
-                    <MobileMediaTroubleshoot
-                      onRetry={handleMediaRetry}
-                      onSkip={handleSkipCamera}
-                    />
+                  <div className="w-full max-w-md bg-white rounded-lg p-6 text-center">
+                    <h3 className="text-lg font-semibold mb-4">Camera Access Failed</h3>
+                    <p className="text-gray-600 mb-4">
+                      Unable to access camera/microphone. Please check your browser permissions.
+                    </p>
+                    <div className="flex space-x-3">
+                      <button
+                        onClick={handleMediaRetry}
+                        className="flex-1 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+                      >
+                        Try Again
+                      </button>
+                      <button
+                        onClick={handleSkipCamera}
+                        className="flex-1 bg-gray-300 text-gray-700 px-4 py-2 rounded hover:bg-gray-400"
+                      >
+                        Skip
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
@@ -788,14 +778,28 @@ const MeetingRoom = ({ user }) => {
                   </div>
                 )}
 
-                {/* Troubleshooting overlay for split view */}
+                {/* Camera access error overlay for split view */}
                 {showTroubleshoot && (
                   <div className="absolute inset-0 bg-black/90 backdrop-blur-sm z-20 flex items-center justify-center p-2">
-                    <div className="w-full max-w-sm">
-                      <MobileMediaTroubleshoot
-                        onRetry={handleMediaRetry}
-                        onSkip={handleSkipCamera}
-                      />
+                    <div className="w-full max-w-sm bg-white rounded-lg p-4 text-center">
+                      <h4 className="font-semibold mb-2">Camera Access Failed</h4>
+                      <p className="text-sm text-gray-600 mb-3">
+                        Unable to access camera/microphone.
+                      </p>
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={handleMediaRetry}
+                          className="flex-1 bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600"
+                        >
+                          Retry
+                        </button>
+                        <button
+                          onClick={handleSkipCamera}
+                          className="flex-1 bg-gray-300 text-gray-700 px-3 py-1 rounded text-sm hover:bg-gray-400"
+                        >
+                          Skip
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )}

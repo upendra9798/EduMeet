@@ -6,25 +6,23 @@ const getSocketUrl = () => {
     return import.meta.env.VITE_SOCKET_URL;
   }
   
-  // For mobile devices, use the network IP instead of localhost
+  // Use localhost for development
   const hostname = window.location.hostname;
   if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    return 'http://172.23.247.244:5001';
+    return 'http://localhost:5001';
   } else {
     return `${window.location.protocol}//${hostname}:5001`;
   }
 };
 
 export const socket = io(getSocketUrl(), {
-    // Use both transports for better mobile compatibility
     transports: ["websocket", "polling"],
-    // Enhanced mobile settings
     timeout: 20000,
     forceNew: true,
     reconnection: true,
     reconnectionDelay: 1000,
-    reconnectionAttempts: 10,
-    maxReconnectionAttempts: 10
+    reconnectionAttempts: 5,
+    maxReconnectionAttempts: 5
 });
 
 //io is a function provided by the library that helps you connect 

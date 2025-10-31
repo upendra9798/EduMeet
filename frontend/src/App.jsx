@@ -5,8 +5,6 @@ import MeetingRoom from './pages/MeetingRoom';
 import HomePage from './pages/HomePage';
 import TestPage from './pages/TestPage';
 import ChatTest from './components/ChatTest';
-import MobileTestConnection from './components/MobileTestConnection';
-import MobileMediaTest from './components/MobileMediaTest';
 
 /**
  * Main App Component
@@ -61,18 +59,6 @@ function App() {
           <Route 
             path="/chat-test" 
             element={<ChatTest />} 
-          />
-
-          {/* Mobile Connection Test */}
-          <Route 
-            path="/mobile-test" 
-            element={<MobileTestConnection />} 
-          />
-
-          {/* Mobile Media Test */}
-          <Route 
-            path="/mobile-media-test" 
-            element={<MobileMediaTest />} 
           />
           
           {/* Redirect unknown routes to home */}

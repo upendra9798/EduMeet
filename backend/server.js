@@ -23,7 +23,7 @@ dotenv.config({ path: path.join(__dirname, '.env') })
 const app = express()
 const PORT = process.env.PORT || 5001
 
-// Enhanced CORS configuration for mobile devices
+// CORS configuration
 const allowedOrigins = [
     // Development origins
     "http://localhost:3000", 
@@ -32,20 +32,10 @@ const allowedOrigins = [
     "http://localhost:5175", 
     "http://localhost:5176",
     
-    // Network IP for mobile access (development)
-    "http://172.23.247.244:5174",
-    "http://172.23.247.244:5173",
-    "http://172.23.247.244:3000",
-    
     // Production domains (ADD YOUR ACTUAL DOMAINS HERE)
     "https://your-domain.com",
     "https://www.your-domain.com",
-    "https://edumeet.your-domain.com",
-    
-    // Development mobile network ranges
-    /^http:\/\/192\.168\.\d{1,3}\.\d{1,3}:(5173|5174|3000)$/,
-    /^http:\/\/10\.\d{1,3}\.\d{1,3}\.\d{1,3}:(5173|5174|3000)$/,
-    /^http:\/\/172\.\d{1,3}\.\d{1,3}\.\d{1,3}:(5173|5174|3000)$/
+    "https://edumeet.your-domain.com"
 ];
 
 // Middleware
@@ -150,8 +140,8 @@ app.use('/api/meetings', meetingRoutes)
 // })
 server.listen(PORT, "0.0.0.0", () => {
   connectMongoDB()
-  console.log(`Server is running on http://172.23.247.244:${PORT}`);
-  console.log(`Mobile access: http://172.23.247.244:${PORT}`);
+  console.log(`Server is running on http://localhost:${PORT}`);
+  console.log(`API available at: http://localhost:${PORT}/api`);
 });
 
 //Starts the HTTP + Socket.IO server on port 5000.

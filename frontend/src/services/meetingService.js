@@ -6,7 +6,7 @@ import api from '../utils/api';
  */
 class MeetingService {
   /**
-   * Helper method to retry requests on mobile networks
+   * Helper method to retry failed requests
    * @param {Function} requestFn - The request function to retry
    * @param {number} maxRetries - Maximum number of retries
    * @returns {Promise} Request result

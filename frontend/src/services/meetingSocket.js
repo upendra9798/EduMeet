@@ -1,6 +1,6 @@
 import { io } from 'socket.io-client';
 
-// Mobile-compatible socket URL configuration
+// Socket URL configuration
 const getSocketUrl = () => {
   if (import.meta.env.VITE_SOCKET_URL) {
     return import.meta.env.VITE_SOCKET_URL;
@@ -11,8 +11,8 @@ const getSocketUrl = () => {
   const protocol = window.location.protocol;
   
   if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    // Development - use network IP for mobile compatibility
-    return 'http://172.23.247.244:5001';
+    // Development - use localhost
+    return 'http://localhost:5001';
   } else if (hostname.includes('your-domain.com')) {
     // Production - use HTTPS WebSocket endpoint
     return 'https://your-domain.com';
