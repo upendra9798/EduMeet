@@ -61,7 +61,7 @@ const ChatTest = () => {
         text: newMessage.trim(),
         sender: 'Test User',
         senderId: testUserId,
-        timestamp: new Date(),
+        timestamp: new Date().toISOString(),
         isOwn: true
       };
       
@@ -164,7 +164,7 @@ const ChatTest = () => {
                 text: 'Test message from debug button',
                 sender: 'Debug',
                 senderId: testUserId,
-                timestamp: new Date(),
+                timestamp: new Date().toISOString(),
                 isOwn: true
               };
               setMessages(prev => [...prev, testMsg]);

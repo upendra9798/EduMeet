@@ -80,7 +80,7 @@ const TestPage = () => {
         id: Date.now(),
         text: newMessage.trim(),
         sender: 'Test User',
-        timestamp: new Date(),
+        timestamp: new Date().toISOString(),
         isOwn: true
       };
       

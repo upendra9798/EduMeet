@@ -283,23 +283,46 @@ class MeetingSocket {
    * @param {Object} message - Message object with text, sender, timestamp
    */
   sendMessage(meetingId, message) {
-    console.log('MeetingSocket.sendMessage called:');
-    console.log('- meetingId:', meetingId);
-    console.log('- this.meetingId:', this.meetingId);
-    console.log('- isConnected:', this.isConnected);
-    console.log('- message:', message);
-    
-    if (this.isConnected && this.meetingId === meetingId) {
-      console.log('Sending message via socket...');
-      this.socket.emit('send-message', {
-        meetingId,
-        message
-      });
-      console.log('Message sent via socket');
-    } else {
-      console.warn('Cannot send message - conditions not met:');
-      console.warn('- isConnected:', this.isConnected);
-      console.warn('- meetingId match:', this.meetingId === meetingId);
+    try {
+      console.log('MeetingSocket.sendMessage called:');
+      console.log('- meetingId:', meetingId);
+      console.log('- this.meetingId:', this.meetingId);
+      console.log('- isConnected:', this.isConnected);
+      console.log('- message:', message);
+      
+      // Validate inputs
+      if (!meetingId || !message) {
+        console.error('Invalid parameters for sendMessage:', { meetingId, message });
+        return;
+      }
+      
+      if (this.isConnected && this.meetingId === meetingId) {
+        console.log('Sending message via socket...');
+        
+        // Create a clean message object to prevent serialization issues
+        const cleanMessage = {
+          id: message.id,
+          text: message.text,
+          sender: message.sender,
+          senderId: message.senderId,
+          timestamp: message.timestamp,
+          // Don't send isOwn property as it's client-specific
+        };
+        
+        this.socket.emit('send-message', {
+          meetingId,
+          message: cleanMessage
+        });
+        console.log('Message sent via socket');
+        
+      } else {
+        console.warn('Cannot send message - conditions not met:');
+        console.warn('- isConnected:', this.isConnected);
+        console.warn('- meetingId match:', this.meetingId === meetingId);
+      }
+      
+    } catch (error) {
+      console.error('Error in MeetingSocket.sendMessage:', error);
     }
   }
 

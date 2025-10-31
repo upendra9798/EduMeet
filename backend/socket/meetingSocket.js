@@ -289,19 +289,40 @@ const meetingSocket = (io) => {
     // Chat message handling
     socket.on("send-message", (data) => {
       try {
+        console.log('Backend received send-message:', data);
+        
         const { meetingId, message } = data;
+        
+        // Validate input data
+        if (!meetingId || !message) {
+          console.error('Invalid message data:', data);
+          socket.emit('meeting-error', { message: 'Invalid message data' });
+          return;
+        }
+        
         const roomId = `meeting-${meetingId}`;
         
         // Verify the user is in this meeting
         const userSession = userMeetings[socket.id];
         if (!userSession || userSession.meetingId !== meetingId) {
+          console.error('User not in meeting:', { socketId: socket.id, meetingId });
           socket.emit('meeting-error', { message: 'You are not in this meeting' });
           return;
         }
 
+        // Create a safe message object for broadcasting
+        const safeMessage = {
+          id: message.id,
+          text: message.text,
+          sender: message.sender,
+          senderId: message.senderId,
+          timestamp: message.timestamp
+        };
+
         // Broadcast message to all other participants in the room
-        socket.to(roomId).emit("message-received", message);
-        console.log(`💬 Message sent in meeting ${meetingId} by ${message.sender}`);
+        console.log(`💬 Broadcasting message in meeting ${meetingId} by ${message.sender}`);
+        socket.to(roomId).emit("message-received", safeMessage);
+        console.log(`💬 Message broadcast complete`);
         
       } catch (error) {
         console.error('Error sending message:', error);

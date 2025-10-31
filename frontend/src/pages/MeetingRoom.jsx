@@ -76,6 +76,7 @@ const MeetingRoom = ({ user }) => {
   const [showMediaPrompt, setShowMediaPrompt] = useState(true);
   const [showTroubleshoot, setShowTroubleshoot] = useState(false);
   const [mediaAccessFailed, setMediaAccessFailed] = useState(false);
+  const [lastMessageTime, setLastMessageTime] = useState(0); // Rate limiting for messages
 
   // Load meeting data and join
   useEffect(() => {
@@ -230,24 +231,49 @@ const MeetingRoom = ({ user }) => {
 
     // Chat message listeners
     MeetingSocket.on("message-received", (message) => {
-      console.log("MeetingRoom: Received message from socket:", message);
-      // Add received message to chat (mark as not own)
-      const receivedMessage = {
-        ...message,
-        isOwn: false,
-      };
-      console.log(
-        "MeetingRoom: Adding received message to state:",
-        receivedMessage
-      );
-      setMessages((prev) => {
-        const updated = [...prev, receivedMessage];
+      try {
+        console.log("MeetingRoom: Received message from socket:", message);
+        
+        // Validate message structure to prevent crashes
+        if (!message || typeof message !== 'object') {
+          console.error("Invalid message received:", message);
+          return;
+        }
+        
+        // Add received message to chat (mark as not own)
+        const receivedMessage = {
+          id: message.id || Date.now(),
+          text: message.text || '',
+          sender: message.sender || 'Unknown',
+          senderId: message.senderId || '',
+          timestamp: message.timestamp || new Date().toISOString(),
+          isOwn: false,
+        };
+        
         console.log(
-          "MeetingRoom: Updated messages with received message:",
-          updated
+          "MeetingRoom: Adding received message to state:",
+          receivedMessage
         );
-        return updated;
-      });
+        
+        setMessages((prev) => {
+          // Prevent duplicate messages
+          const isDuplicate = prev.some(msg => msg.id === receivedMessage.id);
+          if (isDuplicate) {
+            console.log("Duplicate message ignored:", receivedMessage.id);
+            return prev;
+          }
+          
+          const updated = [...prev, receivedMessage];
+          console.log(
+            "MeetingRoom: Updated messages with received message:",
+            updated.length
+          );
+          return updated;
+        });
+        
+      } catch (error) {
+        console.error("Error processing received message:", error);
+      }
     });
   };
 
@@ -465,45 +491,63 @@ const MeetingRoom = ({ user }) => {
 
   // Chat functions
   const sendMessage = () => {
-    console.log("MeetingRoom sendMessage called:");
-    console.log("- newMessage:", newMessage.trim());
-    console.log("- joined:", joined);
-    console.log("- meetingId:", meetingId);
-    console.log("- user:", user);
+    try {
+      console.log("MeetingRoom sendMessage called:");
+      console.log("- newMessage:", newMessage.trim());
+      console.log("- joined:", joined);
+      console.log("- meetingId:", meetingId);
+      console.log("- user:", user);
 
-    if (newMessage.trim() && joined) {
-      const message = {
-        id: Date.now(),
-        text: newMessage.trim(),
-        sender: displayUser.username,
-        senderId: displayUser.id,
-        timestamp: new Date(),
-        isOwn: true,
-      };
+      // Rate limiting: prevent sending messages too quickly (max 1 per second)
+      const now = Date.now();
+      if (now - lastMessageTime < 1000) {
+        console.warn("Rate limit: Message sent too quickly, ignoring");
+        return;
+      }
 
-      console.log("MeetingRoom: Creating message object:", message);
-      // Add to local messages immediately
-      setMessages((prev) => {
-        const updated = [...prev, message];
-        console.log("MeetingRoom: Updated local messages:", updated);
-        return updated;
-      });
+      if (newMessage.trim() && joined) {
+        setLastMessageTime(now);
+        const message = {
+          id: Date.now(),
+          text: newMessage.trim(),
+          sender: displayUser.username || 'Anonymous',
+          senderId: displayUser.id || '',
+          timestamp: new Date().toISOString(), // Convert to ISO string for proper serialization
+          isOwn: true,
+        };
+
+        console.log("MeetingRoom: Creating message object:", message);
+        
+        // Add to local messages immediately
+        setMessages((prev) => {
+          const updated = [...prev, message];
+          console.log("MeetingRoom: Updated local messages:", updated.length);
+          return updated;
+        });
+        
+        setNewMessage("");
+
+        // Send via socket to other participants
+        console.log("MeetingRoom: Sending via socket to meeting:", meetingId);
+        console.log(
+          "MeetingRoom: Socket connection state:",
+          MeetingSocket.isConnected
+        );
+        console.log("MeetingRoom: Socket meetingId:", MeetingSocket.meetingId);
+
+        MeetingSocket.sendMessage(meetingId, message);
+        console.log("MeetingRoom: sendMessage call completed");
+        
+      } else {
+        console.warn("MeetingRoom: Cannot send message - conditions not met:");
+        console.warn("- newMessage valid:", !!newMessage.trim());
+        console.warn("- joined:", joined);
+      }
+      
+    } catch (error) {
+      console.error("Error in sendMessage:", error);
+      // Reset message input on error to prevent stuck state
       setNewMessage("");
-
-      // Send via socket to other participants
-      console.log("MeetingRoom: Sending via socket to meeting:", meetingId);
-      console.log(
-        "MeetingRoom: Socket connection state:",
-        MeetingSocket.isConnected
-      );
-      console.log("MeetingRoom: Socket meetingId:", MeetingSocket.meetingId);
-
-      MeetingSocket.sendMessage(meetingId, message);
-      console.log("MeetingRoom: sendMessage call completed");
-    } else {
-      console.warn("MeetingRoom: Cannot send message - conditions not met:");
-      console.warn("- newMessage valid:", !!newMessage.trim());
-      console.warn("- joined:", joined);
     }
   };
 
@@ -973,10 +1017,19 @@ const MeetingRoom = ({ user }) => {
                               )}
                               <div className="text-sm">{message.text}</div>
                               <div className="text-xs opacity-75 mt-1">
-                                {message.timestamp.toLocaleTimeString([], {
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                })}
+                                {(() => {
+                                  try {
+                                    const date = new Date(message.timestamp);
+                                    return isNaN(date.getTime()) 
+                                      ? 'Invalid time'
+                                      : date.toLocaleTimeString([], {
+                                          hour: "2-digit",
+                                          minute: "2-digit",
+                                        });
+                                  } catch (error) {
+                                    return 'Invalid time';
+                                  }
+                                })()}
                               </div>
                             </div>
                           </div>
