@@ -129,17 +129,37 @@ const MeetingRoom = ({ user }) => {
           console.log("Whiteboard creation:", error.message);
         }
 
-        // Connect to meeting socket
+        // STEP 1: ESTABLISH SOCKET CONNECTION
+        // This is the new Promise-based approach to prevent "Socket not connected" errors
         console.log(
           "Connecting to meeting socket with user ID:",
           user.id,
           "display name:",
           displayUser.username
         );
-        MeetingSocket.connect(displayUser.id);
-        setupSocketListeners();
-        console.log("Joining meeting:", meetingId);
-        MeetingSocket.joinMeeting(meetingId, displayUser.username);
+        
+        try {
+          // CRITICAL CHANGE: await ensures socket connection is fully established
+          // Before this fix: connect() was called but joinMeeting() ran immediately
+          // After this fix: joinMeeting() only runs after connection is confirmed
+          await MeetingSocket.connect(displayUser.id);
+          console.log("Socket connected successfully");
+          
+          // STEP 2: SETUP EVENT LISTENERS
+          // Set up listeners for meeting events (user joined/left, chat, etc.)
+          setupSocketListeners();
+          
+          // STEP 3: JOIN THE MEETING
+          // Now safe to join because socket is guaranteed to be connected
+          console.log("Joining meeting:", meetingId);
+          MeetingSocket.joinMeeting(meetingId, displayUser.username);
+          
+        } catch (socketError) {
+          // STEP 4: ERROR HANDLING
+          // If socket connection fails, show user-friendly error instead of technical details
+          console.error("Failed to connect to meeting socket:", socketError);
+          throw new Error("Unable to connect to meeting server. Please check your connection and try again.");
+        }
 
         setJoined(true);
         console.log('MeetingRoom: Successfully joined meeting, joined state set to true');
