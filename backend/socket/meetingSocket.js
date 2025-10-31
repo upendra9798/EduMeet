@@ -330,6 +330,62 @@ const meetingSocket = (io) => {
       }
     });
 
+    // Handle audio toggle events
+    socket.on("toggle-audio", (data) => {
+      try {
+        const { meetingId, isMuted } = data;
+        
+        // Verify the user is in this meeting
+        const userSession = userMeetings[socket.id];
+        if (!userSession || userSession.meetingId !== meetingId) {
+          console.error('User not in meeting for audio toggle:', { socketId: socket.id, meetingId });
+          return;
+        }
+
+        const roomId = `meeting-${meetingId}`;
+        
+        // Broadcast audio status to other participants
+        socket.to(roomId).emit("participant-audio-toggled", {
+          socketId: socket.id,
+          isMuted: isMuted,
+          participantId: userSession.userId
+        });
+        
+        console.log(`🔊 User ${socket.id} ${isMuted ? 'muted' : 'unmuted'} audio in meeting ${meetingId}`);
+        
+      } catch (error) {
+        console.error('Error handling audio toggle:', error);
+      }
+    });
+
+    // Handle video toggle events
+    socket.on("toggle-video", (data) => {
+      try {
+        const { meetingId, isVideoOff } = data;
+        
+        // Verify the user is in this meeting
+        const userSession = userMeetings[socket.id];
+        if (!userSession || userSession.meetingId !== meetingId) {
+          console.error('User not in meeting for video toggle:', { socketId: socket.id, meetingId });
+          return;
+        }
+
+        const roomId = `meeting-${meetingId}`;
+        
+        // Broadcast video status to other participants
+        socket.to(roomId).emit("participant-video-toggled", {
+          socketId: socket.id,
+          isVideoOff: isVideoOff,
+          participantId: userSession.userId
+        });
+        
+        console.log(`📹 User ${socket.id} ${isVideoOff ? 'turned off' : 'turned on'} video in meeting ${meetingId}`);
+        
+      } catch (error) {
+        console.error('Error handling video toggle:', error);
+      }
+    });
+
     /*
      When a user disconnects:
       - Remove them from all rooms they were part of.

@@ -460,8 +460,18 @@ const MeetingRoom = ({ user }) => {
         track.enabled = isMuted; // If currently muted, enable; if not muted, disable
         console.log(`Audio track ${index} - enabled after:`, track.enabled);
       });
-      setIsMuted(!isMuted);
-      console.log("Muted state changed to:", !isMuted);
+      const newMutedState = !isMuted;
+      setIsMuted(newMutedState);
+      console.log("Muted state changed to:", newMutedState);
+      
+      // Broadcast audio status to other participants
+      if (MeetingSocket?.socket?.connected) {
+        MeetingSocket.socket.emit("toggle-audio", {
+          meetingId,
+          isMuted: newMutedState
+        });
+        console.log("Audio toggle status sent to server:", newMutedState);
+      }
     } else {
       console.warn("No local stream available for audio control");
     }
@@ -482,8 +492,18 @@ const MeetingRoom = ({ user }) => {
         track.enabled = isVideoOff; // If currently off, enable; if on, disable
         console.log(`Video track ${index} - enabled after:`, track.enabled);
       });
-      setIsVideoOff(!isVideoOff);
-      console.log("Video off state changed to:", !isVideoOff);
+      const newVideoOffState = !isVideoOff;
+      setIsVideoOff(newVideoOffState);
+      console.log("Video off state changed to:", newVideoOffState);
+      
+      // Broadcast video status to other participants
+      if (MeetingSocket?.socket?.connected) {
+        MeetingSocket.socket.emit("toggle-video", {
+          meetingId,
+          isVideoOff: newVideoOffState
+        });
+        console.log("Video toggle status sent to server:", newVideoOffState);
+      }
     } else {
       console.warn("No local stream available for video control");
     }

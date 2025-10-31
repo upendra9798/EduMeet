@@ -3,9 +3,66 @@ import MeetingSocket from "../services/meetingSocket";
 import { v4 as uuidv4 } from "uuid";
 
 // Video Tile Component for individual participants
-const VideoTile = ({ participant, isLocal = false, isVideoOff = false }) => {
+const VideoTile = ({ participant, isLocal = false, isVideoOff = false, isMuted = false }) => {
   const videoRef = useRef(null);
+  const [isAudioActive, setIsAudioActive] = useState(false);
+  const [isVideoActive, setIsVideoActive] = useState(false);
   
+  // Debug logging for props
+  console.log(`VideoTile ${isLocal ? 'LOCAL' : 'REMOTE'} ${participant.displayName}:`, {
+    isMuted,
+    isVideoOff,
+    isAudioActive,
+    isVideoActive,
+    hasStream: !!participant.stream
+  });
+  
+  // Monitor audio/video track status
+  useEffect(() => {
+    if (participant.stream) {
+      const audioTracks = participant.stream.getAudioTracks();
+      const videoTracks = participant.stream.getVideoTracks();
+      
+      // Check initial track status
+      setIsAudioActive(audioTracks.length > 0 && audioTracks.some(track => track.enabled));
+      setIsVideoActive(videoTracks.length > 0 && videoTracks.some(track => track.enabled));
+      
+      // Monitor track changes
+      const checkTracks = () => {
+        setIsAudioActive(audioTracks.length > 0 && audioTracks.some(track => track.enabled));
+        setIsVideoActive(videoTracks.length > 0 && videoTracks.some(track => track.enabled));
+      };
+      
+      // Listen for track events
+      audioTracks.forEach(track => {
+        track.addEventListener('ended', checkTracks);
+        track.addEventListener('mute', checkTracks);
+        track.addEventListener('unmute', checkTracks);
+      });
+      
+      videoTracks.forEach(track => {
+        track.addEventListener('ended', checkTracks);
+        track.addEventListener('mute', checkTracks);
+        track.addEventListener('unmute', checkTracks);
+      });
+      
+      return () => {
+        // Cleanup event listeners
+        audioTracks.forEach(track => {
+          track.removeEventListener('ended', checkTracks);
+          track.removeEventListener('mute', checkTracks);
+          track.removeEventListener('unmute', checkTracks);
+        });
+        
+        videoTracks.forEach(track => {
+          track.removeEventListener('ended', checkTracks);
+          track.removeEventListener('mute', checkTracks);
+          track.removeEventListener('unmute', checkTracks);
+        });
+      };
+    }
+  }, [participant.stream]);
+
   useEffect(() => {
     if (videoRef.current && participant.stream) {
       console.log(`🎞️ VideoTile: Setting up video for ${participant.displayName} (local: ${isLocal})`);
@@ -56,13 +113,16 @@ const VideoTile = ({ participant, isLocal = false, isVideoOff = false }) => {
         }`}
       />
       
-      {/* Participant Name Overlay */}
-      <div className="absolute bottom-2 left-2 bg-black/50 text-white px-2 py-1 rounded text-sm font-medium">
-        {participant.displayName} {isLocal && "(You)"}
+      {/* Participant Name - Top Left */}
+      <div className="absolute top-3 left-3 bg-black/80 text-white px-3 py-2 rounded-lg text-sm font-semibold shadow-lg border border-gray-600/50 backdrop-blur-sm">
+        <div className="flex items-center space-x-2">
+          <div className="w-2 h-2 rounded-full bg-green-400"></div>
+          <span>{participant.displayName || 'Participant'} {isLocal && "(You)"}</span>
+        </div>
       </div>
       
       {/* Video Off Overlay */}
-      {isVideoOff && (
+      {(isVideoOff || !isVideoActive) && (
         <div className="absolute inset-0 flex items-center justify-center bg-gray-800">
           <div className="text-center text-white">
             <div className="w-16 h-16 bg-gray-600 rounded-full flex items-center justify-center mx-auto mb-3">
@@ -70,19 +130,47 @@ const VideoTile = ({ participant, isLocal = false, isVideoOff = false }) => {
                 <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-6-3a2 2 0 11-4 0 2 2 0 014 0zm-2 4a5 5 0 00-4.546 2.916A5.986 5.986 0 0010 16a5.986 5.986 0 004.546-2.084A5 5 0 0010 11z" clipRule="evenodd" />
               </svg>
             </div>
+            <h3 className="text-lg font-semibold mb-1">
+              {participant.displayName || 'Participant'}
+              {isLocal && " (You)"}
+            </h3>
             <p className="text-sm text-gray-300">Camera is off</p>
           </div>
         </div>
       )}
       
-      {/* Audio Indicator for Remote Participants */}
-      {!isLocal && participant.stream && (
-        <div className="absolute top-2 right-2 bg-green-500 text-white p-1 rounded-full animate-pulse">
-          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-            <path fillRule="evenodd" d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217z" clipRule="evenodd" />
-          </svg>
+      {/* Audio/Video Status Indicators */}
+      <div className="absolute top-2 right-2 flex space-x-1">
+        {/* Audio Status Indicator */}
+        <div className={`p-1.5 rounded-full ${!isMuted ? 'bg-green-500' : 'bg-red-500'}`}>
+          {!isMuted ? (
+            // Microphone on icon
+            <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z" clipRule="evenodd" />
+            </svg>
+          ) : (
+            // Microphone off icon
+            <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217zM12.293 7.293a1 1 0 011.414 0L15 8.586l1.293-1.293a1 1 0 111.414 1.414L16.414 10l1.293 1.293a1 1 0 01-1.414 1.414L15 11.414l-1.293 1.293a1 1 0 01-1.414-1.414L13.586 10l-1.293-1.293a1 1 0 010-1.414z" clipRule="evenodd" />
+            </svg>
+          )}
         </div>
-      )}
+
+        {/* Video Status Indicator */}
+        <div className={`p-1.5 rounded-full ${!isVideoOff ? 'bg-green-500' : 'bg-red-500'}`}>
+          {!isVideoOff ? (
+            // Video on icon
+            <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+              <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
+            </svg>
+          ) : (
+            // Video off icon
+            <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A2 2 0 0018 13V7a1 1 0 00-1.447-.894L14 7.382V6a2 2 0 00-2-2H8.586l2 2H12v3.586l2-2V9.382l2.553-1.276A1 1 0 0018 9v2.586l-2 2V13a1 1 0 01-.553.894L14 12.618V14a2 2 0 01-2 2H4a2 2 0 01-2-2V6a2 2 0 012-2h1.586l-2.293-2.293zM4 8.414L6.586 6H4v2.414zM7.414 9L12 13.586V14H8.586L7.414 9z" clipRule="evenodd" />
+            </svg>
+          )}
+        </div>
+      </div>
     </div>
   );
 };
@@ -339,6 +427,30 @@ export default function VideoChat({ meetingId, userId, localStream, isMuted, isV
       });
     });
 
+    // When a participant toggles their audio
+    MeetingSocket.on("participant-audio-toggled", (data) => {
+      console.log('VideoChat: Participant audio toggled:', data);
+      setRemoteParticipants(prev => ({
+        ...prev,
+        [data.socketId]: {
+          ...prev[data.socketId],
+          isMuted: data.isMuted
+        }
+      }));
+    });
+
+    // When a participant toggles their video
+    MeetingSocket.on("participant-video-toggled", (data) => {
+      console.log('VideoChat: Participant video toggled:', data);
+      setRemoteParticipants(prev => ({
+        ...prev,
+        [data.socketId]: {
+          ...prev[data.socketId],
+          isVideoOff: data.isVideoOff
+        }
+      }));
+    });
+
     return () => {
       MeetingSocket.off("meeting-joined");
       MeetingSocket.off("user-joined");
@@ -513,6 +625,7 @@ export default function VideoChat({ meetingId, userId, localStream, isMuted, isV
                 stream: localStream
               }}
               isLocal={true}
+              isMuted={isMuted}
               isVideoOff={isVideoOff || !localStream}
             />
             
@@ -522,7 +635,10 @@ export default function VideoChat({ meetingId, userId, localStream, isMuted, isV
                 key={participant.socketId}
                 participant={participant}
                 isLocal={false}
-                isVideoOff={false}
+                onToggleVideo={() => {}}
+                onToggleMute={() => {}}
+                isMuted={participant.isMuted || false}
+                isVideoOff={participant.isVideoOff || false}
               />
             ))}
             
