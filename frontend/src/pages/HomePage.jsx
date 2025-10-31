@@ -38,13 +38,25 @@ const HomePage = ({ user }) => {
                 <h1 className="text-2xl font-bold text-blue-600">EduMeet</h1>
               </div>
             </div>
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-2">
               <span className="text-sm text-gray-600">Welcome, {user.username}</span>
+              <button
+                onClick={() => navigate('/mobile-test')}
+                className="bg-gray-600 text-white px-2 py-1 text-xs rounded-md hover:bg-gray-700 transition-colors"
+              >
+                API Test
+              </button>
+              <button
+                onClick={() => navigate('/mobile-media-test')}
+                className="bg-purple-600 text-white px-2 py-1 text-xs rounded-md hover:bg-purple-700 transition-colors"
+              >
+                📱 Media
+              </button>
               <button
                 onClick={() => navigate('/dashboard')}
                 className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
               >
-                Go to Dashboard
+                Dashboard
               </button>
             </div>
           </div>

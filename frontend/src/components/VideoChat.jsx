@@ -8,6 +8,11 @@ const VideoTile = ({ participant, isLocal = false, isVideoOff = false }) => {
   
   useEffect(() => {
     if (videoRef.current && participant.stream) {
+      console.log(`🎞️ VideoTile: Setting up video for ${participant.displayName} (local: ${isLocal})`);
+      console.log(`🎞️ VideoTile: Stream active: ${participant.stream.active}`);
+      console.log(`🎞️ VideoTile: Video tracks: ${participant.stream.getVideoTracks().length}`);
+      console.log(`🎞️ VideoTile: Audio tracks: ${participant.stream.getAudioTracks().length}`);
+      
       videoRef.current.srcObject = participant.stream;
       
       // For remote streams, ensure audio is enabled
@@ -15,14 +20,26 @@ const VideoTile = ({ participant, isLocal = false, isVideoOff = false }) => {
         const audioTracks = participant.stream.getAudioTracks();
         audioTracks.forEach(track => {
           track.enabled = true;
-          console.log('VideoChat: Enabled audio track for', participant.displayName);
+          console.log('🎞️ VideoTile: Enabled audio track for', participant.displayName);
+        });
+        
+        // Log video track details for debugging
+        const videoTracks = participant.stream.getVideoTracks();
+        videoTracks.forEach((track, index) => {
+          console.log(`🎞️ VideoTile: Video track ${index} state:`, track.readyState);
+          console.log(`🎞️ VideoTile: Video track ${index} enabled:`, track.enabled);
+          console.log(`🎞️ VideoTile: Video track ${index} settings:`, track.getSettings());
         });
       }
       
       // Auto-play the video (this is required for both video and audio)
-      videoRef.current.play().catch(err => {
-        console.log('Auto-play prevented (normal behavior):', err.message);
-      });
+      videoRef.current.play()
+        .then(() => {
+          console.log(`✅ VideoTile: Video playing for ${participant.displayName}`);
+        })
+        .catch(err => {
+          console.log(`⚠️ VideoTile: Auto-play prevented for ${participant.displayName}:`, err.message);
+        });
     }
   }, [participant.stream, isLocal, participant.displayName]);
 
@@ -246,30 +263,45 @@ export default function VideoChat({ meetingId, userId, localStream, isMuted, isV
 
     // Receive an offer
     MeetingSocket.on("offer", async ({ from, sdp }) => {
-      console.log('VideoChat: Received offer from:', from);
+      console.log('📥 VideoChat: Received offer from:', from);
+      console.log('📥 VideoChat: Offer SDP type:', sdp.type);
       try {
         const pc = await createPeerConnection(from, false);
+        console.log('📥 VideoChat: Setting remote description...');
         await pc.setRemoteDescription(new RTCSessionDescription(sdp));
-        const answer = await pc.createAnswer();
+        console.log('📥 VideoChat: Remote description set successfully');
+        
+        const answer = await pc.createAnswer({
+          offerToReceiveAudio: true,
+          offerToReceiveVideo: true,
+          voiceActivityDetection: false
+        });
         await pc.setLocalDescription(answer);
+        console.log('📥 VideoChat: Answer created with SDP type:', answer.type);
+        console.log('📥 VideoChat: Local description set, connection state:', pc.connectionState);
+        
         MeetingSocket.emit("answer", { to: from, sdp: answer });
-        console.log('VideoChat: Sent answer to:', from);
+        console.log('📥 VideoChat: Sent answer to:', from);
       } catch (error) {
-        console.error('VideoChat: Error handling offer:', error);
+        console.error('❌ VideoChat: Error handling offer from', from, ':', error);
       }
     });
 
     // Receive an answer
     MeetingSocket.on("answer", async ({ from, sdp }) => {
-      console.log('VideoChat: Received answer from:', from);
+      console.log('📨 VideoChat: Received answer from:', from);
+      console.log('📨 VideoChat: Answer SDP type:', sdp.type);
       try {
         const pc = pcRef.current[from];
         if (pc) {
+          console.log('📨 VideoChat: Setting remote description from answer...');
           await pc.setRemoteDescription(new RTCSessionDescription(sdp));
-          console.log('VideoChat: Set remote description from answer');
+          console.log('📨 VideoChat: Remote description set from answer, connection state:', pc.connectionState);
+        } else {
+          console.error('❌ VideoChat: No peer connection found for:', from);
         }
       } catch (error) {
-        console.error('VideoChat: Error handling answer:', error);
+        console.error('❌ VideoChat: Error handling answer from', from, ':', error);
       }
     });
 
@@ -320,28 +352,86 @@ export default function VideoChat({ meetingId, userId, localStream, isMuted, isV
   /** 🎛️ Create WebRTC Peer Connection */
   const createPeerConnection = async (id, isInitiator) => {
     try {
-      console.log(`VideoChat: Creating peer connection with ${id}, isInitiator: ${isInitiator}, hasLocalStream: ${!!localStreamRef.current}`);
+      console.log(`📹 VideoChat: Creating peer connection with ${id}`);
+      console.log(`📹 VideoChat: - isInitiator: ${isInitiator}`);
+      console.log(`📹 VideoChat: - hasLocalStream: ${!!localStreamRef.current}`);
+      console.log(`📹 VideoChat: - User Agent: ${navigator.userAgent.slice(0, 50)}...`);
+      console.log(`📹 VideoChat: - Screen size: ${window.screen.width}x${window.screen.height}`);
       
+      // Production-ready ICE servers with fallbacks
+      const iceServers = [
+        // Google STUN servers (free)
+        { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun1.l.google.com:19302" },
+        { urls: "stun:stun2.l.google.com:19302" },
+        
+        // Additional STUN servers for better connectivity
+        { urls: "stun:stun.cloudflare.com:3478" },
+        { urls: "stun:stun.nextcloud.com:443" }
+        
+        // TODO: Add TURN server for production (required for mobile networks)
+        // { 
+        //   urls: "turn:your-turn-server.com:3478",
+        //   username: "your-username",
+        //   credential: "your-password"
+        // }
+      ];
+
       const pc = new RTCPeerConnection({
-        iceServers: [
-          { urls: "stun:stun.l.google.com:19302" },
-          { urls: "stun:stun1.l.google.com:19302" }
-        ],
-        iceCandidatePoolSize: 10
+        iceServers,
+        iceCandidatePoolSize: 10,
+        // Mobile-optimized RTCConfiguration
+        bundlePolicy: 'balanced',
+        rtcpMuxPolicy: 'require',
+        iceTransportPolicy: 'all'
       });
 
       // Send ICE candidates to the other peer
       pc.onicecandidate = (event) => {
         if (event.candidate) {
-          console.log('VideoChat: Sending ICE candidate to:', id);
+          console.log('VideoChat: Sending ICE candidate to:', id, 'Type:', event.candidate.type);
           MeetingSocket.emit("ice-candidate", { to: id, candidate: event.candidate });
+        } else {
+          console.log('VideoChat: ICE gathering complete for:', id);
         }
+      };
+
+      // Monitor connection state for mobile debugging
+      pc.oniceconnectionstatechange = () => {
+        console.log('VideoChat: ICE connection state changed to:', pc.iceConnectionState, 'for peer:', id);
+        if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
+          console.warn('VideoChat: Connection issues detected for peer:', id);
+        }
+      };
+
+      pc.onconnectionstatechange = () => {
+        console.log('VideoChat: Connection state changed to:', pc.connectionState, 'for peer:', id);
+      };
+
+      // Enhanced ICE gathering state monitoring
+      pc.onicegatheringstatechange = () => {
+        console.log('VideoChat: ICE gathering state:', pc.iceGatheringState, 'for peer:', id);
       };
 
       // When remote stream arrives - this works regardless of local stream
       pc.ontrack = (event) => {
-        console.log('VideoChat: Received remote stream from:', id);
+        console.log('🎬 VideoChat: Received remote stream from:', id);
         const [remoteStream] = event.streams;
+        
+        // Log stream details
+        console.log('🎬 VideoChat: Remote stream details:', {
+          id: remoteStream.id,
+          active: remoteStream.active,
+          videoTracks: remoteStream.getVideoTracks().length,
+          audioTracks: remoteStream.getAudioTracks().length
+        });
+        
+        // Log video track details if any
+        const videoTracks = remoteStream.getVideoTracks();
+        if (videoTracks.length > 0) {
+          console.log('🎥 VideoChat: Video track settings:', videoTracks[0].getSettings());
+          console.log('🎥 VideoChat: Video track state:', videoTracks[0].readyState);
+        }
         
         // Update existing participant with stream, preserving display name
         setRemoteParticipants(prev => ({
@@ -354,7 +444,7 @@ export default function VideoChat({ meetingId, userId, localStream, isMuted, isV
           }
         }));
         
-        console.log('VideoChat: Updated participant with stream:', id);
+        console.log('✅ VideoChat: Updated participant with stream:', id);
       };
 
       // Add local tracks to the connection ONLY if available
@@ -372,15 +462,20 @@ export default function VideoChat({ meetingId, userId, localStream, isMuted, isV
 
       // If user is initiator, create an offer
       if (isInitiator) {
-        console.log('VideoChat: Creating offer for:', id);
+        console.log('📤 VideoChat: Creating offer for:', id);
         const offer = await pc.createOffer({
           offerToReceiveAudio: true,
           offerToReceiveVideo: true,
-          voiceActivityDetection: false // Helps with audio quality
+          voiceActivityDetection: false, // Helps with audio quality
+          // Mobile-specific constraints
+          iceRestart: false
         });
         await pc.setLocalDescription(offer);
+        console.log('📤 VideoChat: Offer created with SDP type:', offer.type);
+        console.log('📤 VideoChat: Local description set, gathering state:', pc.iceGatheringState);
+        
         MeetingSocket.emit("offer", { to: id, sdp: offer });
-        console.log('VideoChat: Sent offer to:', id);
+        console.log('📤 VideoChat: Sent offer to:', id);
       }
 
       return pc;

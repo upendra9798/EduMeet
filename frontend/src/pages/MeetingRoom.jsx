@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import VideoChat from "../components/VideoChat";
 import Whiteboard from "../components/Whiteboard";
+import MobileMediaTroubleshoot from "../components/MobileMediaTroubleshoot";
 import MeetingService from "../services/meetingService";
 import MeetingSocket from "../services/meetingSocket";
 import WhiteboardService from "../services/whiteboardService";
@@ -74,6 +75,8 @@ const MeetingRoom = ({ user }) => {
   // Media stream state
   const [localStream, setLocalStream] = useState(null);
   const [showMediaPrompt, setShowMediaPrompt] = useState(true);
+  const [showTroubleshoot, setShowTroubleshoot] = useState(false);
+  const [mediaAccessFailed, setMediaAccessFailed] = useState(false);
 
   // Load meeting data and join
   useEffect(() => {
@@ -269,22 +272,141 @@ const MeetingRoom = ({ user }) => {
 
 
 
-  // Manual media access request (for users who initially denied or want to enable later)
+  // Mobile-friendly media access with progressive fallbacks
   const requestMediaAccess = async () => {
-    try {
-      console.log('MeetingRoom: Manual media access requested...');
-      setShowMediaPrompt(true); // Show prompt while requesting
-      const stream = await navigator.mediaDevices.getUserMedia({
+    console.log('MeetingRoom: Manual media access requested...');
+    setShowMediaPrompt(true);
+
+    // Check if mediaDevices is supported (required for mobile)
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setShowMediaPrompt(false);
+      alert("Your browser doesn't support camera/microphone access. Please use Chrome, Firefox, or Safari.");
+      return;
+    }
+
+    // Progressive fallback constraints (from most ideal to most basic)
+    const constraints = [
+      // Attempt 1: Mobile-optimized constraints
+      {
+        video: {
+          width: { ideal: 640, max: 1280 },
+          height: { ideal: 480, max: 720 },
+          frameRate: { ideal: 15, max: 30 },
+          facingMode: 'user'
+        },
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        }
+      },
+      // Attempt 2: Simplified video constraints
+      {
+        video: {
+          width: { ideal: 320 },
+          height: { ideal: 240 },
+          facingMode: 'user'
+        },
+        audio: true
+      },
+      // Attempt 3: Basic constraints
+      {
         video: true,
-        audio: true,
+        audio: true
+      },
+      // Attempt 4: Audio only (video might be blocked)
+      {
+        video: false,
+        audio: true
+      }
+    ];
+
+    for (let i = 0; i < constraints.length; i++) {
+      try {
+        console.log(`MeetingRoom: Attempting media access with constraint set ${i + 1}:`, constraints[i]);
+        const stream = await navigator.mediaDevices.getUserMedia(constraints[i]);
+        
+        setLocalStream(stream);
+        setShowMediaPrompt(false);
+        console.log(`MeetingRoom: Media stream initialized with constraint set ${i + 1}:`, stream);
+        
+        // Log what we actually got
+        const videoTracks = stream.getVideoTracks();
+        const audioTracks = stream.getAudioTracks();
+        console.log(`MeetingRoom: Got ${videoTracks.length} video tracks, ${audioTracks.length} audio tracks`);
+        
+        if (videoTracks.length > 0) {
+          console.log('Video track settings:', videoTracks[0].getSettings());
+        }
+        
+        return; // Success, exit function
+      } catch (error) {
+        console.error(`MeetingRoom: Constraint set ${i + 1} failed:`, error.name, error.message);
+        
+        // If this is the last attempt, handle the error
+        if (i === constraints.length - 1) {
+          setShowMediaPrompt(false);
+          setMediaAccessFailed(true);
+          
+          // Check if we're on mobile to show appropriate help
+          const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+          
+          if (isMobile || window.innerWidth <= 768) {
+            // Show mobile-specific troubleshooting
+            setShowTroubleshoot(true);
+          } else {
+            // Show desktop alert
+            let errorMessage = "Unable to access camera/microphone. ";
+            if (error.name === 'NotAllowedError') {
+              errorMessage += "Permission denied. Please:\n";
+              errorMessage += "1. Click the camera/microphone icon in your browser's address bar\n";
+              errorMessage += "2. Select 'Allow' for both camera and microphone\n";
+              errorMessage += "3. Refresh this page and try again";
+            } else if (error.name === 'NotFoundError') {
+              errorMessage += "No camera/microphone found. Please check your device has working camera and microphone.";
+            } else if (error.name === 'NotReadableError') {
+              errorMessage += "Camera/microphone is being used by another application. Please close other apps and try again.";
+            } else {
+              errorMessage += `Error: ${error.message}`;
+            }
+            
+            alert(errorMessage);
+          }
+          return;
+        }
+        
+        // Continue to next constraint set
+        continue;
+      }
+    }
+  };
+
+  // Handle retry from troubleshooting component
+  const handleMediaRetry = () => {
+    setShowTroubleshoot(false);
+    setMediaAccessFailed(false);
+    setShowMediaPrompt(true);
+    // Reset any previous errors
+    requestMediaAccess();
+  };
+
+  // Handle skip camera access (audio only mode)
+  const handleSkipCamera = async () => {
+    setShowTroubleshoot(false);
+    setMediaAccessFailed(false);
+    setShowMediaPrompt(false);
+    
+    try {
+      // Try to get audio only
+      const audioStream = await navigator.mediaDevices.getUserMedia({
+        video: false,
+        audio: true
       });
-      setLocalStream(stream);
-      setShowMediaPrompt(false); // Hide prompt when successful
-      console.log("MeetingRoom: Media stream initialized manually:", stream);
+      setLocalStream(audioStream);
+      console.log("MeetingRoom: Audio-only stream initialized");
     } catch (error) {
-      console.error("Error accessing media devices:", error);
-      setShowMediaPrompt(false); // Hide prompt even if failed
-      alert("Unable to access camera/microphone. Please check your browser permissions and try again.");
+      console.log("MeetingRoom: Even audio access failed, continuing without media");
+      // Continue without any media - user can still participate via chat and whiteboard
     }
   };
 
@@ -601,9 +723,21 @@ const MeetingRoom = ({ user }) => {
                   </div>
                 </div>
               )}
+
+              {/* Mobile-friendly troubleshooting component when media access fails */}
+              {showTroubleshoot && (
+                <div className="absolute inset-0 bg-black/80 backdrop-blur-sm z-20 flex items-center justify-center p-4">
+                  <div className="w-full max-w-md">
+                    <MobileMediaTroubleshoot
+                      onRetry={handleMediaRetry}
+                      onSkip={handleSkipCamera}
+                    />
+                  </div>
+                </div>
+              )}
               
               {/* Small floating button when prompt is hidden */}
-              {!localStream && !showMediaPrompt && (
+              {!localStream && !showMediaPrompt && !showTroubleshoot && (
                 <div className="absolute bottom-4 right-4 z-10">
                   <button
                     onClick={() => setShowMediaPrompt(true)}
@@ -653,7 +787,20 @@ const MeetingRoom = ({ user }) => {
                     </div>
                   </div>
                 )}
-                {!localStream && !showMediaPrompt && (
+
+                {/* Troubleshooting overlay for split view */}
+                {showTroubleshoot && (
+                  <div className="absolute inset-0 bg-black/90 backdrop-blur-sm z-20 flex items-center justify-center p-2">
+                    <div className="w-full max-w-sm">
+                      <MobileMediaTroubleshoot
+                        onRetry={handleMediaRetry}
+                        onSkip={handleSkipCamera}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {!localStream && !showMediaPrompt && !showTroubleshoot && (
                   <div className="absolute bottom-2 right-2">
                     <button
                       onClick={() => setShowMediaPrompt(true)}

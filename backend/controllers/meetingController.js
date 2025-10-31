@@ -10,6 +10,11 @@ import { v4 as uuidv4 } from 'uuid';
  */
 export const createMeeting = async (req, res) => {
     try {
+        console.log('=== CREATE MEETING REQUEST ===');
+        console.log('Request headers:', req.headers);
+        console.log('Request body:', req.body);
+        console.log('Request origin:', req.get('Origin'));
+        
         // Extract meeting details from request body
         const { title, startTime, endTime, maxParticipants, roomType, meetingSettings } = req.body;
         
@@ -63,7 +68,14 @@ export const createMeeting = async (req, res) => {
             }
         };
         
-        console.log('Sending response:', responseData);
+        console.log('=== SENDING RESPONSE ===');
+        console.log('Response data:', responseData);
+        
+        // Set headers for mobile compatibility
+        res.header('Access-Control-Allow-Origin', req.get('Origin') || '*');
+        res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+        res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept');
+        
         res.status(201).json(responseData);
     } catch (error) {
         // Handle any errors during meeting creation
@@ -92,6 +104,12 @@ export const createMeeting = async (req, res) => {
  */
 export const joinMeeting = async (req, res) => {
     try {
+        console.log('=== JOIN MEETING REQUEST ===');
+        console.log('Request headers:', req.headers);
+        console.log('Request params:', req.params);
+        console.log('Request body:', req.body);
+        console.log('Request origin:', req.get('Origin'));
+        
         // Extract meeting ID from URL parameters
         const { meetingId } = req.params;
         // Get user ID from authenticated user or request body (fallback for testing)
@@ -126,7 +144,7 @@ export const joinMeeting = async (req, res) => {
         }
 
         // Return success response with complete meeting information
-        res.status(200).json({
+        const responseData = {
             success: true,
             message: 'Successfully joined meeting',
             meeting: {
@@ -140,7 +158,17 @@ export const joinMeeting = async (req, res) => {
                 startTime: meeting.startTime,
                 endTime: meeting.endTime
             }
-        });
+        };
+        
+        console.log('=== JOIN MEETING SUCCESS ===');
+        console.log('Response data:', responseData);
+        
+        // Set headers for mobile compatibility
+        res.header('Access-Control-Allow-Origin', req.get('Origin') || '*');
+        res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+        res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept');
+        
+        res.status(200).json(responseData);
     } catch (error) {
         // Handle any errors during meeting join process
         console.error('Error joining meeting:', error);

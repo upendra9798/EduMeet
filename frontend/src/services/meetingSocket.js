@@ -1,7 +1,29 @@
 import { io } from 'socket.io-client';
 
-// Socket connection configuration
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5001';
+// Mobile-compatible socket URL configuration
+const getSocketUrl = () => {
+  if (import.meta.env.VITE_SOCKET_URL) {
+    return import.meta.env.VITE_SOCKET_URL;
+  }
+  
+  // Auto-detect based on current environment
+  const hostname = window.location.hostname;
+  const protocol = window.location.protocol;
+  
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    // Development - use network IP for mobile compatibility
+    return 'http://172.23.247.244:5001';
+  } else if (hostname.includes('your-domain.com')) {
+    // Production - use HTTPS WebSocket endpoint
+    return 'https://your-domain.com';
+  } else {
+    // Fallback - use same host as frontend
+    const port = protocol === 'https:' ? '' : ':5001';
+    return `${protocol}//${hostname}${port}`;
+  }
+};
+
+const SOCKET_URL = getSocketUrl();
 
 /**
  * Meeting Socket Manager
@@ -38,15 +60,32 @@ class MeetingSocket {
     
     this.userId = userId;
     console.log('Creating new socket connection to:', `${SOCKET_URL}/meeting`);
+    console.log('User Agent:', navigator.userAgent);
+    console.log('Is Mobile:', /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
+    
     this.socket = io(`${SOCKET_URL}/meeting`, {
       transports: ['websocket', 'polling'],
       timeout: 20000,
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionAttempts: 10
     });
 
     this.socket.on('connect', () => {
-      console.log('Connected to meeting socket:', this.socket.id);
+      console.log('✅ MeetingSocket: Connected to meeting socket:', this.socket.id);
+      console.log('✅ MeetingSocket: Connection URL was:', `${SOCKET_URL}/meeting`);
       this.isConnected = true;
       this.emit('connected', { socketId: this.socket.id });
+    });
+
+    this.socket.on('connect_error', (error) => {
+      console.error('❌ MeetingSocket: Connection error:', error);
+      console.error('❌ MeetingSocket: Failed URL:', `${SOCKET_URL}/meeting`);
+    });
+
+    this.socket.on('disconnect', (reason) => {
+      console.log('🔌 MeetingSocket: Disconnected:', reason);
+      this.isConnected = false;
     });
 
     this.socket.on('disconnect', () => {
