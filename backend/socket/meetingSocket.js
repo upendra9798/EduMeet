@@ -507,29 +507,51 @@ const meetingSocket = (io) => {
         if (targetSocketId) {
           console.log(`🎯 Found target participant socket: ${targetSocketId}`);
           
-          // Notify the removed participant
-          console.log(`📤 Sending removed-from-meeting to ${targetSocketId}`);
-          meetingNamespace.to(targetSocketId).emit("removed-from-meeting", {
-            message: "You have been removed from the meeting by the host"
-          });
-          
-          // Remove from users array
-          if (users[roomId]) {
-            const oldUsers = [...users[roomId]];
-            users[roomId] = users[roomId].filter(id => id !== targetSocketId);
-            console.log(`� Users in room before: ${oldUsers}, after: ${users[roomId]}`);
-          }
-          
-          // Remove from userMeetings
-          delete userMeetings[targetSocketId];
-          console.log(`🗑️ Removed ${targetSocketId} from userMeetings`);
-          
-          // Disconnect the participant LAST
+          // Get target socket FIRST before any operations
           const targetSocket = meetingNamespace.sockets.get(targetSocketId);
+          
           if (targetSocket) {
-            console.log(`🔌 Disconnecting socket ${targetSocketId}`);
-            targetSocket.leave(roomId);
-            targetSocket.disconnect();
+            // STEP 1: Send removal notice DIRECTLY to target user (highest priority)
+            console.log(`📤 DIRECT: Sending removed-from-meeting to ${targetSocketId}`);
+            targetSocket.emit("removed-from-meeting", {
+              message: "You have been removed from the meeting by the host",
+              meetingId: meetingId,
+              timestamp: new Date().toISOString()
+            });
+
+            // STEP 2: Wait a moment to ensure message is received
+            setTimeout(async () => {
+              console.log(`🔌 Starting disconnection process for ${targetSocketId}`);
+              
+              // STEP 3: Remove from tracking BEFORE broadcast
+              // Remove from users array
+              if (users[roomId]) {
+                const oldUsers = [...users[roomId]];
+                users[roomId] = users[roomId].filter(id => id !== targetSocketId);
+                console.log(`🗑️ Users in room before: ${oldUsers}, after: ${users[roomId]}`);
+              }
+              
+              // Remove from userMeetings
+              const userDisplayName = userMeetings[targetSocketId]?.displayName || 'Unknown User';
+              delete userMeetings[targetSocketId];
+              console.log(`🗑️ Removed ${targetSocketId} from userMeetings`);
+              
+              // STEP 4: Notify ALL other participants that user left
+              console.log(`📢 Broadcasting user-left to ALL participants in room ${roomId}`);
+              meetingNamespace.to(roomId).emit("user-left", {
+                socketId: targetSocketId,
+                userId: targetUserId,
+                displayName: userDisplayName,
+                reason: 'removed-by-host'
+              });
+
+              // STEP 5: Disconnect the participant LAST
+              console.log(`🔌 Disconnecting socket ${targetSocketId}`);
+              targetSocket.leave(roomId);
+              targetSocket.disconnect();
+              
+            }, 1000); // 1 second delay to ensure message delivery
+
           } else {
             console.log(`❌ Could not find socket object for ${targetSocketId}`);
           }

@@ -269,25 +269,24 @@ const MeetingRoom = ({ user }) => {
             
             // WRAPPER LISTENERS: Add these so MeetingSocket service tracks them
             console.log("WRAPPER: Setting up wrapper listeners for service tracking...");
+            // Silent wrapper listeners (no alerts - just for service tracking)
             MeetingSocket.on("participant-removed", (data) => {
-              console.log("🗑️ WRAPPER HANDLER: Participant removed event received:", data);
-              alert(`WRAPPER WORKS! Removing ${data.userId}`);
-              
-              setParticipants(prev => {
-                const filtered = prev.filter(p => p.userId !== data.userId);
-                console.log("🗑️ Participants removed via WRAPPER");
-                return filtered;
-              });
+              console.log("🗑️ WRAPPER: Participant removed (silent):", data);
+              setParticipants(prev => prev.filter(p => p.userId !== data.userId));
             });
 
             MeetingSocket.on("host-action-success", (data) => {
-              console.log("✅ WRAPPER: Host action successful:", data);
-              alert(`Host Action: ${data.action} successful for ${data.targetUserId}`);
+              console.log("✅ WRAPPER: Host action successful (silent):", data);
             });
 
             MeetingSocket.on("CUSTOM-PARTICIPANT-REMOVED", (data) => {
-              console.log("🎯 WRAPPER: Custom event received:", data);
-              alert(`CUSTOM WRAPPER: ${data.message}`);
+              console.log("🎯 WRAPPER: Custom event (silent):", data);
+            });
+
+            // Silent wrapper listener for removed-from-meeting (service tracking only)
+            MeetingSocket.on("removed-from-meeting", (data) => {
+              console.log("🚨 WRAPPER: Removed from meeting (silent):", data);
+              // No alert - let direct listener handle UI
             });
             
           } else {
@@ -435,9 +434,9 @@ const MeetingRoom = ({ user }) => {
     MeetingSocket.socket.on("meeting-error", (error) => {
       console.error("🚨 Meeting error from backend:", error);
       setError(error.message);
-      // Show alert for host control errors
+      // Log host control errors (no alert)
       if (error.message.includes('host') || error.message.includes('Host')) {
-        alert(`Host Control Error: ${error.message}`);
+        console.error(`Host Control Error: ${error.message}`);
       }
     });
 
@@ -491,9 +490,22 @@ const MeetingRoom = ({ user }) => {
 
     // Host control event listeners
     MeetingSocket.socket.on("removed-from-meeting", (data) => {
-      console.log("🚨 MeetingRoom: YOU have been removed from meeting by host:", data);
-      alert(data.message || "You have been removed from the meeting");
-      navigate("/dashboard");
+      console.log("🚨 DIRECT: YOU have been removed from meeting by host:", data);
+      
+      // Show clear notification
+      alert(`🚫 REMOVED FROM MEETING\n\n${data.message || "You have been removed from the meeting"}\n\nYou will be redirected to the dashboard.`);
+      
+      // Clean up local state
+      setParticipants([]);
+      setMeeting(null);
+      
+      // Leave meeting socket
+      MeetingSocket.leaveMeeting();
+      
+      // Navigate with a small delay to ensure cleanup
+      setTimeout(() => {
+        navigate("/dashboard");
+      }, 1000);
     });
 
     // Debug socket connection
@@ -505,14 +517,13 @@ const MeetingRoom = ({ user }) => {
 
     // Test event listeners - register directly
     console.log("🔧 Registering test event handlers...");
+    // Test event listeners (no alerts - just logging)
     MeetingSocket.on("test-event", (data) => {
       console.log("🧪 UI HANDLER: Test event received:", data);
-      alert(`UI HANDLER: Test event received: ${data.message}`);
     });
 
     MeetingSocket.on("test-backend-response", (data) => {
       console.log("🧪 UI HANDLER: Backend response received:", data);
-      alert(`UI HANDLER: Backend responded: ${data.message}`);
     });
 
 
@@ -527,39 +538,11 @@ const MeetingRoom = ({ user }) => {
     // Test with ANY event first
     MeetingSocket.socket.onAny((eventName, ...args) => {
       console.log("� DIRECT: ANY EVENT RECEIVED:", eventName, args);
-      if (eventName === 'participant-removed' || eventName === 'test-event') {
-        alert(`DIRECT: Received ${eventName}`);
-      }
+      // No alerts - just monitoring events
     });
 
     // Also register specific handlers
-    MeetingSocket.socket.on("participant-removed", (data) => {
-      console.log("🗑️ DIRECT HANDLER: Participant removed event received:", data);
-      alert(`DIRECT HANDLER: Participant removed for userId: ${data.userId}`);
-      
-      setParticipants(prev => {
-        const filtered = prev.filter(p => p.userId !== data.userId);
-        console.log("🗑️ Participants after removal:", filtered.map(p => ({ userId: p.userId, socketId: p.socketId, displayName: p.displayName })));
-        return filtered;
-      });
-    });
-
-    MeetingSocket.socket.on("test-event", (data) => {
-      console.log("🧪 DIRECT HANDLER: Test event received:", data);
-      alert(`DIRECT HANDLER: Test event: ${data.message}`);
-    });
-
-    // Listen for CUSTOM event to verify communication path
-    MeetingSocket.socket.on("CUSTOM-PARTICIPANT-REMOVED", (data) => {
-      console.log("🎯 CUSTOM EVENT RECEIVED:", data);
-      alert(`CUSTOM EVENT WORKS! Removing ${data.userId}`);
-      
-      setParticipants(prev => {
-        const filtered = prev.filter(p => p.userId !== data.userId);
-        console.log("🗑️ Participants removed via CUSTOM event");
-        return filtered;
-      });
-    });
+    // NOTE: Removed duplicate direct handlers - wrapper listeners handle these events
 
     MeetingSocket.socket.on("host-control-audio", (data) => {
       console.log("MeetingRoom: Host controlled audio:", data);
@@ -571,7 +554,7 @@ const MeetingRoom = ({ user }) => {
             track.enabled = false;
           });
         }
-        alert(`You have been muted by the host`);
+        console.log(`You have been muted by the host`);
       }
     });
 
@@ -585,7 +568,7 @@ const MeetingRoom = ({ user }) => {
             track.enabled = false;
           });
         }
-        alert(`Your video has been disabled by the host`);
+        console.log(`Your video has been disabled by the host`);
       }
     });
 
