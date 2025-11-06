@@ -16,6 +16,14 @@ const meetingSocket = (io) => {
 
   meetingNamespace.on("connection", (socket) => {
     console.log("Meeting client connected:", socket.id);
+    
+    // Test event listener to verify communication works both ways
+    socket.on("test-frontend-event", (data) => {
+      console.log("🧪 Backend received test event from frontend:", data);
+      console.log("🧪 Sending test-backend-response to:", socket.id);
+      socket.emit("test-backend-response", { message: "Backend received your test event!" });
+      console.log("🧪 test-backend-response sent");
+    });
 
     //🏠 4️⃣ Joining a Meeting Room
     socket.on("join-meeting", async (data) => {
@@ -26,6 +34,13 @@ const meetingSocket = (io) => {
         const meeting = await Meeting.findOne({ meetingId, isActive: true });
         if (!meeting) {
           socket.emit('meeting-error', { message: 'Meeting not found or inactive' });
+          return;
+        }
+
+        // Check if user is blocked
+        const isBlocked = meeting.blockedParticipants.some(blocked => blocked.userId === userId);
+        if (isBlocked) {
+          socket.emit('meeting-error', { message: 'You have been blocked from this meeting' });
           return;
         }
 
@@ -77,9 +92,19 @@ const meetingSocket = (io) => {
 
         const otherUsers = users[roomId].filter((id) => id !== socket.id);
 
+        console.log(`🔧 Backend Debug for meeting ${meetingId}:`);
+        console.log(`   👥 users[roomId]:`, users[roomId]);
+        console.log(`   🆔 socket.id:`, socket.id);
+        console.log(`   👤 current userId:`, userId);
+        console.log(`   📋 meeting.currentParticipants:`, meeting.currentParticipants.map(p => ({ userId: p.userId, socketId: p.socketId, displayName: p.displayName })));
+        console.log(`   📋 meeting.participants (legacy):`, meeting.participants);
+        console.log(`   🔗 userMeetings keys:`, Object.keys(userMeetings));
+        console.log(`   ➡️ otherUsers:`, otherUsers);
+
         // Get existing participants info
         const existingParticipants = otherUsers.map(socketId => {
           const userSession = userMeetings[socketId];
+          console.log(`   🔍 Checking socketId ${socketId}:`, userSession);
           if (userSession) {
             return {
               socketId,
@@ -89,6 +114,8 @@ const meetingSocket = (io) => {
           }
           return null;
         }).filter(Boolean);
+
+        console.log(`   ✅ existingParticipants:`, existingParticipants);
 
         // Notify new user about existing peers
         socket.emit("meeting-joined", { 
@@ -100,16 +127,21 @@ const meetingSocket = (io) => {
         });
 
         // Emit user-joined events for existing participants to the new user
+        console.log(`   📤 Emitting user-joined events to new user for existing participants:`, existingParticipants.length);
         existingParticipants.forEach(participant => {
+          console.log(`      👤 Emitting user-joined for:`, participant);
           socket.emit("user-joined", participant);
         });
 
         // Notify existing users that a new user joined
-        socket.to(roomId).emit("user-joined", {
+        const newUserData = {
           socketId: socket.id,
           userId,
           displayName: displayName || `User ${userId.slice(-4)}`
-        });
+        };
+        console.log(`   📢 Broadcasting user-joined to room ${roomId} for new user:`, newUserData);
+        console.log(`   👥 Broadcasting to sockets:`, otherUsers);
+        socket.to(roomId).emit("user-joined", newUserData);
 
         console.log(`👥 User ${userId} joined meeting ${meetingId} (room: ${roomId})`);
       } catch (error) {
@@ -383,6 +415,373 @@ const meetingSocket = (io) => {
         
       } catch (error) {
         console.error('Error handling video toggle:', error);
+      }
+    });
+
+    // HOST CONTROLS - Remove participant from meeting
+    socket.on("host-remove-participant", async (data) => {
+      console.log('🚨 Backend: host-remove-participant event received:', {
+        socketId: socket.id,
+        data,
+        userSession: userMeetings[socket.id]
+      });
+      
+      try {
+        const { meetingId, targetUserId } = data;
+        const userSession = userMeetings[socket.id];
+        
+        if (!userSession || userSession.meetingId !== meetingId) {
+          socket.emit('meeting-error', { message: 'You are not in this meeting' });
+          return;
+        }
+
+        // Verify user is host
+        const meeting = await Meeting.findOne({ meetingId });
+        console.log('🔍 Host verification for remove participant:', {
+          meetingId,
+          meetingHost: meeting?.host,
+          meetingHostType: typeof meeting?.host,
+          userSessionUserId: userSession.userId,
+          userSessionUserIdType: typeof userSession.userId,
+          isHostMatch: meeting?.host?.toString() === userSession.userId
+        });
+        
+        if (!meeting || meeting.host.toString() !== userSession.userId) {
+          socket.emit('meeting-error', { message: 'Only hosts can remove participants' });
+          return;
+        }
+
+        const roomId = `meeting-${meetingId}`;
+        
+        // Find target participant's socket
+        let targetSocketId = null;
+        for (const [socketId, session] of Object.entries(userMeetings)) {
+          if (session.userId === targetUserId && session.meetingId === meetingId) {
+            targetSocketId = socketId;
+            break;
+          }
+        }
+
+        // Notify ALL participants FIRST (before disconnecting anyone)
+        console.log(`📢 Broadcasting participant-removed to ALL in room ${roomId}`);
+        console.log(`📢 Sockets in room before removal: ${users[roomId] || []}`);
+        
+        // Debug: Check which sockets are actually in the room
+        const socketsInRoom = await meetingNamespace.in(roomId).allSockets();
+        console.log(`🔍 Actual sockets in room ${roomId}:`, Array.from(socketsInRoom));
+        console.log(`🔍 Host socket ID: ${socket.id}`);
+        console.log(`🔍 Target socket ID: ${targetSocketId}`);
+        
+        // DIRECT APPROACH: Send to the requesting socket immediately
+        console.log(`📤 DIRECT: Sending participant-removed to requesting host socket ${socket.id}`);
+        socket.emit("participant-removed", {
+          userId: targetUserId,
+          removedBy: userSession.userId
+        });
+        
+        // Also send with a custom event name to test
+        socket.emit("CUSTOM-PARTICIPANT-REMOVED", {
+          userId: targetUserId,
+          removedBy: userSession.userId,
+          message: "CUSTOM EVENT TEST"
+        });
+        
+        socket.emit("test-event", { 
+          message: `DIRECT to host ${socket.id}`,
+          timestamp: new Date().toISOString()
+        });
+        
+        console.log(`📤 DIRECT: Events sent to host socket ${socket.id}`);
+
+        // Remove from database
+        await Meeting.updateOne(
+          { meetingId },
+          { 
+            $pull: { 
+              currentParticipants: { userId: targetUserId },
+              participants: targetUserId 
+            }
+          }
+        );
+
+        if (targetSocketId) {
+          console.log(`🎯 Found target participant socket: ${targetSocketId}`);
+          
+          // Notify the removed participant
+          console.log(`📤 Sending removed-from-meeting to ${targetSocketId}`);
+          meetingNamespace.to(targetSocketId).emit("removed-from-meeting", {
+            message: "You have been removed from the meeting by the host"
+          });
+          
+          // Remove from users array
+          if (users[roomId]) {
+            const oldUsers = [...users[roomId]];
+            users[roomId] = users[roomId].filter(id => id !== targetSocketId);
+            console.log(`� Users in room before: ${oldUsers}, after: ${users[roomId]}`);
+          }
+          
+          // Remove from userMeetings
+          delete userMeetings[targetSocketId];
+          console.log(`🗑️ Removed ${targetSocketId} from userMeetings`);
+          
+          // Disconnect the participant LAST
+          const targetSocket = meetingNamespace.sockets.get(targetSocketId);
+          if (targetSocket) {
+            console.log(`🔌 Disconnecting socket ${targetSocketId}`);
+            targetSocket.leave(roomId);
+            targetSocket.disconnect();
+          } else {
+            console.log(`❌ Could not find socket object for ${targetSocketId}`);
+          }
+        } else {
+          console.log(`❌ Could not find target socket for user ${targetUserId}`);
+        }
+
+        console.log(`✅ Sending host-action-success to ${socket.id}`);
+        socket.emit('host-action-success', { 
+          action: 'remove-participant', 
+          targetUserId 
+        });
+
+        console.log(`🚫 Host ${userSession.userId} removed participant ${targetUserId} from meeting ${meetingId}`);
+
+      } catch (error) {
+        console.error('Error removing participant:', error);
+        socket.emit('meeting-error', { message: 'Failed to remove participant' });
+      }
+    });
+
+    // HOST CONTROLS - Block participant from rejoining
+    socket.on("host-block-participant", async (data) => {
+      try {
+        const { meetingId, targetUserId } = data;
+        const userSession = userMeetings[socket.id];
+        
+        if (!userSession || userSession.meetingId !== meetingId) {
+          socket.emit('meeting-error', { message: 'You are not in this meeting' });
+          return;
+        }
+
+        // Verify user is host
+        const meeting = await Meeting.findOne({ meetingId });
+        console.log('🔍 Host verification for block participant:', {
+          meetingId,
+          meetingHost: meeting?.host,
+          meetingHostType: typeof meeting?.host,
+          userSessionUserId: userSession.userId,
+          userSessionUserIdType: typeof userSession.userId,
+          isHostMatch: meeting?.host?.toString() === userSession.userId
+        });
+        
+        if (!meeting || meeting.host.toString() !== userSession.userId) {
+          socket.emit('meeting-error', { message: 'Only hosts can block participants' });
+          return;
+        }
+
+        // Add to blocked list
+        await Meeting.updateOne(
+          { meetingId },
+          { 
+            $push: { 
+              blockedParticipants: {
+                userId: targetUserId,
+                blockedBy: userSession.userId,
+                blockedAt: new Date()
+              }
+            }
+          }
+        );
+
+        socket.emit('host-action-success', { 
+          action: 'block-participant', 
+          targetUserId 
+        });
+
+        console.log(`🚫 Host ${userSession.userId} blocked participant ${targetUserId} in meeting ${meetingId}`);
+
+      } catch (error) {
+        console.error('Error blocking participant:', error);
+        socket.emit('meeting-error', { message: 'Failed to block participant' });
+      }
+    });
+
+    // HOST CONTROLS - Force mute participant
+    socket.on("host-mute-participant", async (data) => {
+      try {
+        const { meetingId, targetUserId, isForceMuted } = data;
+        const userSession = userMeetings[socket.id];
+        
+        if (!userSession || userSession.meetingId !== meetingId) {
+          socket.emit('meeting-error', { message: 'You are not in this meeting' });
+          return;
+        }
+
+        // Verify user is host
+        const meeting = await Meeting.findOne({ meetingId });
+        console.log('🔍 Host verification for mute participant:', {
+          meetingId,
+          meetingHost: meeting?.host,
+          meetingHostType: typeof meeting?.host,
+          userSessionUserId: userSession.userId,
+          userSessionUserIdType: typeof userSession.userId,
+          isHostMatch: meeting?.host?.toString() === userSession.userId
+        });
+        
+        if (!meeting || meeting.host.toString() !== userSession.userId) {
+          socket.emit('meeting-error', { message: 'Only hosts can control participant audio' });
+          return;
+        }
+
+        const roomId = `meeting-${meetingId}`;
+        
+        // Update participant controls in database
+        await Meeting.updateOne(
+          { meetingId },
+          { 
+            $pull: { participantControls: { userId: targetUserId } }
+          }
+        );
+        
+        if (isForceMuted) {
+          await Meeting.updateOne(
+            { meetingId },
+            { 
+              $push: { 
+                participantControls: {
+                  userId: targetUserId,
+                  isForceMuted: true,
+                  controlledBy: userSession.userId,
+                  controlledAt: new Date()
+                }
+              }
+            }
+          );
+        }
+
+        // Find target participant's socket and notify them
+        let targetSocketId = null;
+        for (const [socketId, session] of Object.entries(userMeetings)) {
+          if (session.userId === targetUserId && session.meetingId === meetingId) {
+            targetSocketId = socketId;
+            break;
+          }
+        }
+
+        if (targetSocketId) {
+          meetingNamespace.to(targetSocketId).emit("host-control-audio", {
+            isForceMuted,
+            controlledBy: userSession.userId
+          });
+        }
+
+        // Notify other participants
+        socket.to(roomId).emit("participant-audio-controlled", {
+          userId: targetUserId,
+          isForceMuted,
+          controlledBy: userSession.userId
+        });
+
+        socket.emit('host-action-success', { 
+          action: 'mute-participant', 
+          targetUserId,
+          isForceMuted
+        });
+
+        console.log(`🔇 Host ${userSession.userId} ${isForceMuted ? 'muted' : 'unmuted'} participant ${targetUserId} in meeting ${meetingId}`);
+
+      } catch (error) {
+        console.error('Error controlling participant audio:', error);
+        socket.emit('meeting-error', { message: 'Failed to control participant audio' });
+      }
+    });
+
+    // HOST CONTROLS - Disable participant video
+    socket.on("host-disable-video", async (data) => {
+      try {
+        const { meetingId, targetUserId, isVideoDisabled } = data;
+        const userSession = userMeetings[socket.id];
+        
+        if (!userSession || userSession.meetingId !== meetingId) {
+          socket.emit('meeting-error', { message: 'You are not in this meeting' });
+          return;
+        }
+
+        // Verify user is host
+        const meeting = await Meeting.findOne({ meetingId });
+        console.log('🔍 Host verification for disable video:', {
+          meetingId,
+          meetingHost: meeting?.host,
+          meetingHostType: typeof meeting?.host,
+          userSessionUserId: userSession.userId,
+          userSessionUserIdType: typeof userSession.userId,
+          isHostMatch: meeting?.host?.toString() === userSession.userId
+        });
+        
+        if (!meeting || meeting.host.toString() !== userSession.userId) {
+          socket.emit('meeting-error', { message: 'Only hosts can control participant video' });
+          return;
+        }
+
+        const roomId = `meeting-${meetingId}`;
+        
+        // Update participant controls in database
+        await Meeting.updateOne(
+          { meetingId },
+          { 
+            $pull: { participantControls: { userId: targetUserId } }
+          }
+        );
+        
+        if (isVideoDisabled) {
+          await Meeting.updateOne(
+            { meetingId },
+            { 
+              $push: { 
+                participantControls: {
+                  userId: targetUserId,
+                  isVideoDisabled: true,
+                  controlledBy: userSession.userId,
+                  controlledAt: new Date()
+                }
+              }
+            }
+          );
+        }
+
+        // Find target participant's socket and notify them
+        let targetSocketId = null;
+        for (const [socketId, session] of Object.entries(userMeetings)) {
+          if (session.userId === targetUserId && session.meetingId === meetingId) {
+            targetSocketId = socketId;
+            break;
+          }
+        }
+
+        if (targetSocketId) {
+          meetingNamespace.to(targetSocketId).emit("host-control-video", {
+            isVideoDisabled,
+            controlledBy: userSession.userId
+          });
+        }
+
+        // Notify other participants
+        socket.to(roomId).emit("participant-video-controlled", {
+          userId: targetUserId,
+          isVideoDisabled,
+          controlledBy: userSession.userId
+        });
+
+        socket.emit('host-action-success', { 
+          action: 'disable-video', 
+          targetUserId,
+          isVideoDisabled
+        });
+
+        console.log(`📹 Host ${userSession.userId} ${isVideoDisabled ? 'disabled' : 'enabled'} video for participant ${targetUserId} in meeting ${meetingId}`);
+
+      } catch (error) {
+        console.error('Error controlling participant video:', error);
+        socket.emit('meeting-error', { message: 'Failed to control participant video' });
       }
     });
 

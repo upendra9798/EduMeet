@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import VideoChat from "../components/VideoChat";
 import Whiteboard from "../components/Whiteboard";
+import HostControls from "../components/HostControls";
 import MeetingService from "../services/meetingService";
 import MeetingSocket from "../services/meetingSocket";
 import WhiteboardService from "../services/whiteboardService";
@@ -66,10 +67,49 @@ const MeetingRoom = ({ user }) => {
   // Media controls state
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
+  
+  // Clean start - no test participants
+  React.useEffect(() => {
+    console.log("MeetingRoom: Component mounted, starting with empty participants");
+    setParticipants([]);
+  }, []);
 
   // Chat state
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState("");
+  const [listenersSetup, setListenersSetup] = useState(false);
+  
+  // Monitor participants state changes
+  React.useEffect(() => {
+    console.log("PARTICIPANTS STATE CHANGED:", participants.length, participants);
+  }, [participants]);
+  
+  // Alternative approach: Use VideoChat's remote participants data
+  React.useEffect(() => {
+    // Try to sync with VideoChat component after a delay
+    const syncWithVideoChat = () => {
+      // Look for VideoChat component's remote participants in the global scope
+      if (window.videoChat && window.videoChat.remoteParticipants) {
+        console.log("Syncing with VideoChat remote participants:", window.videoChat.remoteParticipants);
+        
+        const videoParticipants = Object.values(window.videoChat.remoteParticipants).map(p => ({
+          socketId: p.socketId,
+          userId: p.userId || 'unknown',
+          displayName: p.displayName || 'Remote User',
+          isMuted: false,
+          isVideoOff: false
+        }));
+        
+        if (videoParticipants.length > 0 && participants.length === 0) {
+          console.log("Adding participants from VideoChat:", videoParticipants);
+          setParticipants(videoParticipants);
+        }
+      }
+    };
+    
+    const syncInterval = setInterval(syncWithVideoChat, 5000); // Check every 5 seconds
+    return () => clearInterval(syncInterval);
+  }, [participants]);
 
   // Media stream state
   const [localStream, setLocalStream] = useState(null);
@@ -100,6 +140,38 @@ const MeetingRoom = ({ user }) => {
     try {
       console.log('MeetingRoom: loadMeetingAndJoin started for meetingId:', meetingId);
       setLoading(true);
+
+      // STEP 1: SETUP EVENT LISTENERS FIRST
+      // This prevents race conditions where events are received before listeners are ready
+      console.log('MeetingRoom: Setting up socket listeners before connection...');
+      
+      // Test if socket has basic functionality
+      console.log('MeetingRoom: Testing socket functionality...');
+      console.log('MeetingRoom: Socket object:', MeetingSocket);
+      console.log('MeetingRoom: Socket.on function exists?', typeof MeetingSocket.on === 'function');
+      console.log('MeetingRoom: Socket connected?', MeetingSocket.connected);
+      console.log('MeetingRoom: Socket ID:', MeetingSocket.id);
+      
+      // Skip setupSocketListeners since we'll set up direct listeners after connection
+      console.log('MeetingRoom: Skipping setupSocketListeners - will set up direct listeners after connection');
+      
+      // Add listeners for ANY event to see what events are actually firing
+      const originalOn = MeetingSocket.on.bind(MeetingSocket);
+      const originalEmit = MeetingSocket.emit.bind(MeetingSocket);
+      
+      // Log all incoming events
+      const eventLogger = (eventName) => {
+        return (...args) => {
+          console.log(`🔥 EVENT RECEIVED: ${eventName}`, args);
+        };
+      };
+      
+      // Monitor common events
+      ['meeting-joined', 'user-joined', 'user-left', 'connect', 'disconnect'].forEach(event => {
+        MeetingSocket.on(event, eventLogger(event));
+      });
+      
+      console.log('MeetingRoom: Event monitoring enabled');
 
       // Get meeting details
       console.log('MeetingRoom: Fetching meeting details...');
@@ -146,14 +218,99 @@ const MeetingRoom = ({ user }) => {
           await MeetingSocket.connect(displayUser.id);
           console.log("Socket connected successfully");
           
-          // STEP 2: SETUP EVENT LISTENERS
-          // Set up listeners for meeting events (user joined/left, chat, etc.)
-          setupSocketListeners();
+          // STEP 2: SET UP DIRECT LISTENERS AFTER CONNECTION
+          console.log("DIRECT: Setting up listeners after connection...");
+          
+          if (MeetingSocket && MeetingSocket.socket) {
+            MeetingSocket.socket.on("meeting-joined", (data) => {
+              console.log("DIRECT: meeting-joined received!", data);
+              if (data.existingParticipants) {
+                const others = data.existingParticipants.filter(p => p.userId !== (displayUser?.id || user?.id));
+                const newParticipants = others.map(p => ({
+                  socketId: p.socketId,
+                  userId: p.userId,
+                  displayName: p.displayName,
+                  isMuted: false,
+                  isVideoOff: false
+                }));
+                
+                console.log("DIRECT: Setting participants from meeting-joined:", newParticipants);
+                setParticipants(newParticipants);
+              }
+            });
+            
+            MeetingSocket.socket.on("user-joined", (data) => {
+              console.log("DIRECT: user-joined received!", data);
+              if (data.userId !== (displayUser?.id || user?.id)) {
+                setParticipants(prev => {
+                  // Check for duplicates by both socketId AND userId
+                  const existsBySocket = prev.find(p => p.socketId === data.socketId);
+                  const existsByUser = prev.find(p => p.userId === data.userId);
+                  
+                  if (!existsBySocket && !existsByUser) {
+                    const newParticipant = {
+                      socketId: data.socketId,
+                      userId: data.userId,
+                      displayName: data.displayName,
+                      isMuted: false,
+                      isVideoOff: false
+                    };
+                    console.log("DIRECT: Adding new participant:", newParticipant);
+                    return [...prev, newParticipant];
+                  } else {
+                    console.log("DIRECT: Participant already exists, skipping");
+                    return prev;
+                  }
+                });
+              }
+            });
+            
+            console.log("DIRECT: Direct listeners set up successfully");
+            
+            // WRAPPER LISTENERS: Add these so MeetingSocket service tracks them
+            console.log("WRAPPER: Setting up wrapper listeners for service tracking...");
+            MeetingSocket.on("participant-removed", (data) => {
+              console.log("🗑️ WRAPPER HANDLER: Participant removed event received:", data);
+              alert(`WRAPPER WORKS! Removing ${data.userId}`);
+              
+              setParticipants(prev => {
+                const filtered = prev.filter(p => p.userId !== data.userId);
+                console.log("🗑️ Participants removed via WRAPPER");
+                return filtered;
+              });
+            });
+
+            MeetingSocket.on("host-action-success", (data) => {
+              console.log("✅ WRAPPER: Host action successful:", data);
+              alert(`Host Action: ${data.action} successful for ${data.targetUserId}`);
+            });
+
+            MeetingSocket.on("CUSTOM-PARTICIPANT-REMOVED", (data) => {
+              console.log("🎯 WRAPPER: Custom event received:", data);
+              alert(`CUSTOM WRAPPER: ${data.message}`);
+            });
+            
+          } else {
+            console.error("DIRECT: Socket not available after connection");
+          }
           
           // STEP 3: JOIN THE MEETING
           // Now safe to join because socket is guaranteed to be connected
           console.log("Joining meeting:", meetingId);
           MeetingSocket.joinMeeting(meetingId, displayUser.username);
+          
+          console.log('MeetingRoom: Meeting joined successfully, waiting for participants...');
+          
+          // Add a backup check for participants after 3 seconds
+          setTimeout(() => {
+            console.log('MeetingRoom: Backup participant check after 3 seconds...');
+            console.log('MeetingRoom: Current participants state:', participants);
+            
+            if (participants.length === 0) {
+              console.log('MeetingRoom: No participants detected, requesting manually...');
+              MeetingSocket.emit('request-participants', { meetingId });
+            }
+          }, 3000);
           
         } catch (socketError) {
           // STEP 4: ERROR HANDLING
@@ -181,56 +338,111 @@ const MeetingRoom = ({ user }) => {
 
   // Setup socket event listeners
   const setupSocketListeners = () => {
-    console.log("MeetingRoom: Setting up socket listeners...");
+    console.log("�🚀🚀 SETUP SOCKET LISTENERS CALLED! 🚀🚀🚀");
+    console.log("�🔧 MeetingRoom: Setting up socket listeners...");
+    console.log("🔧 MeetingRoom: Socket connected:", MeetingSocket.isConnected);
 
-    // Clear any existing listeners to avoid duplicates
-    MeetingSocket.off("meeting-joined");
-    MeetingSocket.off("user-joined");
-    MeetingSocket.off("user-left");
-    MeetingSocket.off("meeting-error");
-    MeetingSocket.off("message-received");
+    // TEMPORARILY COMMENTED OUT: Clear any existing listeners to avoid duplicates
+    // MeetingSocket.off("meeting-joined");
+    // MeetingSocket.off("user-joined");
+    // MeetingSocket.off("user-left");
+    // MeetingSocket.off("meeting-error");
+    // MeetingSocket.off("message-received");
+    // MeetingSocket.off("removed-from-meeting");
+    // MeetingSocket.off("participant-removed");
+    // MeetingSocket.off("host-control-audio");
+    // MeetingSocket.off("host-control-video");
+    // MeetingSocket.off("participant-audio-controlled");
+    // MeetingSocket.off("participant-video-controlled");
+    // MeetingSocket.off("host-action-success");
+    // MeetingSocket.off("participant-audio-toggled");
+    // MeetingSocket.off("participant-video-toggled");
+    
+    console.log("🔧 MeetingRoom: Cleared existing listeners, setting up new ones...");
+    console.log("🔧 MeetingRoom: Socket connected?", MeetingSocket.isConnected);
+    console.log("🔧 MeetingRoom: Socket ID:", MeetingSocket.id);
 
     MeetingSocket.on("meeting-joined", (data) => {
-      console.log("MeetingRoom: Joined meeting successfully:", data);
-      // Initialize with empty array - we'll get participants via user-joined events for existing users
-      setParticipants([]);
+      console.log("🎯 Meeting joined successfully!");
+      console.log("🎯 Existing participants:", data.existingParticipants);
+      
+      const currentUserId = displayUser?.id || user?.id;
+      const otherParticipants = [];
+      
+      // Add only OTHER participants (not the current user)
+      if (data.existingParticipants && Array.isArray(data.existingParticipants)) {
+        data.existingParticipants.forEach(p => {
+          // Skip current user - they're shown in the "You" section
+          if (p.userId !== currentUserId) {
+            otherParticipants.push({
+              socketId: p.socketId,
+              userId: p.userId,
+              displayName: p.displayName || `User ${p.userId.slice(-4)}`,
+              isMuted: false,
+              isVideoOff: false
+            });
+          }
+        });
+      }
+      
+      console.log("🎯 Setting other participants:", otherParticipants);
+      setParticipants(otherParticipants);
     });
 
     MeetingSocket.on("user-joined", (data) => {
-      console.log("User joined:", data);
-      setParticipants((prev) => {
-        // Always add new participant with their display name and socket ID
-        const newParticipant = {
-          socketId: data.socketId,
-          userId: data.userId,
-          displayName: data.displayName || `User ${data.userId.slice(-4)}`,
-        };
-
-        // Check if this exact socket connection already exists
-        const existingIndex = prev.findIndex(
-          (p) => p.socketId === data.socketId
-        );
-        if (existingIndex === -1) {
-          return [...prev, newParticipant];
+      console.log("👤 New user joined:", data);
+      
+      if (!data?.socketId || !data?.userId) {
+        console.log("👤 Invalid user-joined data");
+        return;
+      }
+      
+      // Skip if this is the current user 
+      const currentUserId = displayUser?.id || user?.id;
+      if (data.userId === currentUserId) {
+        console.log("👤 Skipping current user");
+        return;
+      }
+      
+      const newParticipant = {
+        socketId: data.socketId,
+        userId: data.userId,
+        displayName: data.displayName || `User ${data.userId.slice(-4)}`,
+        isMuted: false,
+        isVideoOff: false
+      };
+      
+      setParticipants(prev => {
+        // Check if already exists
+        if (prev.find(p => p.socketId === data.socketId)) {
+          console.log("👤 Participant already exists");
+          return prev;
         }
-        return prev;
+        
+        console.log("👤 Adding new participant:", newParticipant);
+        return [...prev, newParticipant];
       });
-    });
+    });    console.log("🔧 MeetingRoom: Event listeners registered successfully");
+    console.log("🔧 MeetingRoom: Current participants state before events:", participants.length);
 
-    MeetingSocket.on("user-left", (data) => {
+    MeetingSocket.socket.on("user-left", (data) => {
       console.log("User left:", data);
       setParticipants((prev) =>
         prev.filter((p) => p.socketId !== data.socketId)
       );
     });
 
-    MeetingSocket.on("meeting-error", (error) => {
-      console.error("Meeting error:", error);
+    MeetingSocket.socket.on("meeting-error", (error) => {
+      console.error("🚨 Meeting error from backend:", error);
       setError(error.message);
+      // Show alert for host control errors
+      if (error.message.includes('host') || error.message.includes('Host')) {
+        alert(`Host Control Error: ${error.message}`);
+      }
     });
 
     // Chat message listeners
-    MeetingSocket.on("message-received", (message) => {
+    MeetingSocket.socket.on("message-received", (message) => {
       try {
         console.log("MeetingRoom: Received message from socket:", message);
         
@@ -273,7 +485,152 @@ const MeetingRoom = ({ user }) => {
         
       } catch (error) {
         console.error("Error processing received message:", error);
+        
       }
+    });
+
+    // Host control event listeners
+    MeetingSocket.socket.on("removed-from-meeting", (data) => {
+      console.log("🚨 MeetingRoom: YOU have been removed from meeting by host:", data);
+      alert(data.message || "You have been removed from the meeting");
+      navigate("/dashboard");
+    });
+
+    // Debug socket connection
+    console.log("🔍 Frontend socket info:", {
+      socketId: MeetingSocket.socket?.id,
+      connected: MeetingSocket.socket?.connected,
+      isConnected: MeetingSocket.isConnected
+    });
+
+    // Test event listeners - register directly
+    console.log("🔧 Registering test event handlers...");
+    MeetingSocket.on("test-event", (data) => {
+      console.log("🧪 UI HANDLER: Test event received:", data);
+      alert(`UI HANDLER: Test event received: ${data.message}`);
+    });
+
+    MeetingSocket.on("test-backend-response", (data) => {
+      console.log("🧪 UI HANDLER: Backend response received:", data);
+      alert(`UI HANDLER: Backend responded: ${data.message}`);
+    });
+
+
+
+    // DIRECT SOCKET APPROACH - Test basic connectivity first
+    console.log("🔧 Testing direct socket connectivity...", {
+      socketExists: !!MeetingSocket.socket,
+      socketId: MeetingSocket.socket?.id,
+      socketConnected: MeetingSocket.socket?.connected
+    });
+
+    // Test with ANY event first
+    MeetingSocket.socket.onAny((eventName, ...args) => {
+      console.log("� DIRECT: ANY EVENT RECEIVED:", eventName, args);
+      if (eventName === 'participant-removed' || eventName === 'test-event') {
+        alert(`DIRECT: Received ${eventName}`);
+      }
+    });
+
+    // Also register specific handlers
+    MeetingSocket.socket.on("participant-removed", (data) => {
+      console.log("🗑️ DIRECT HANDLER: Participant removed event received:", data);
+      alert(`DIRECT HANDLER: Participant removed for userId: ${data.userId}`);
+      
+      setParticipants(prev => {
+        const filtered = prev.filter(p => p.userId !== data.userId);
+        console.log("🗑️ Participants after removal:", filtered.map(p => ({ userId: p.userId, socketId: p.socketId, displayName: p.displayName })));
+        return filtered;
+      });
+    });
+
+    MeetingSocket.socket.on("test-event", (data) => {
+      console.log("🧪 DIRECT HANDLER: Test event received:", data);
+      alert(`DIRECT HANDLER: Test event: ${data.message}`);
+    });
+
+    // Listen for CUSTOM event to verify communication path
+    MeetingSocket.socket.on("CUSTOM-PARTICIPANT-REMOVED", (data) => {
+      console.log("🎯 CUSTOM EVENT RECEIVED:", data);
+      alert(`CUSTOM EVENT WORKS! Removing ${data.userId}`);
+      
+      setParticipants(prev => {
+        const filtered = prev.filter(p => p.userId !== data.userId);
+        console.log("🗑️ Participants removed via CUSTOM event");
+        return filtered;
+      });
+    });
+
+    MeetingSocket.socket.on("host-control-audio", (data) => {
+      console.log("MeetingRoom: Host controlled audio:", data);
+      if (data.isForceMuted) {
+        // Force mute the local participant
+        setIsMuted(true);
+        if (localStream) {
+          localStream.getAudioTracks().forEach(track => {
+            track.enabled = false;
+          });
+        }
+        alert(`You have been muted by the host`);
+      }
+    });
+
+    MeetingSocket.socket.on("host-control-video", (data) => {
+      console.log("MeetingRoom: Host controlled video:", data);
+      if (data.isVideoDisabled) {
+        // Force disable video for the local participant
+        setIsVideoOff(true);
+        if (localStream) {
+          localStream.getVideoTracks().forEach(track => {
+            track.enabled = false;
+          });
+        }
+        alert(`Your video has been disabled by the host`);
+      }
+    });
+
+    MeetingSocket.socket.on("participant-audio-controlled", (data) => {
+      console.log("MeetingRoom: Participant audio controlled by host:", data);
+      // Update participant state to reflect host control
+      setParticipants(prev => prev.map(p => 
+        p.userId === data.userId 
+          ? { ...p, isMuted: data.isForceMuted, controlledByHost: true }
+          : p
+      ));
+    });
+
+    MeetingSocket.socket.on("participant-video-controlled", (data) => {
+      console.log("MeetingRoom: Participant video controlled by host:", data);
+      // Update participant state to reflect host control
+      setParticipants(prev => prev.map(p => 
+        p.userId === data.userId 
+          ? { ...p, isVideoOff: data.isVideoDisabled, videoControlledByHost: true }
+          : p
+      ));
+    });
+
+    MeetingSocket.socket.on("host-action-success", (data) => {
+      console.log("MeetingRoom: Host action successful:", data);
+      // You can add UI feedback here if needed
+    });
+
+    // Listen for participant audio/video toggle events to update participant status
+    MeetingSocket.socket.on("participant-audio-toggled", (data) => {
+      console.log("MeetingRoom: Participant audio toggled:", data);
+      setParticipants(prev => prev.map(p => 
+        p.socketId === data.socketId 
+          ? { ...p, isMuted: data.isMuted }
+          : p
+      ));
+    });
+
+    MeetingSocket.socket.on("participant-video-toggled", (data) => {
+      console.log("MeetingRoom: Participant video toggled:", data);
+      setParticipants(prev => prev.map(p => 
+        p.socketId === data.socketId 
+          ? { ...p, isVideoOff: data.isVideoOff }
+          : p
+      ));
     });
   };
 
@@ -937,6 +1294,47 @@ const MeetingRoom = ({ user }) => {
                     {participants.length + 1}
                   </span>
                 </div>
+                
+                {/* Debug Info */}
+                <div className="text-xs text-gray-400 mb-2 p-2 bg-gray-800 rounded">
+                  <div>📊 Debug Info:</div>
+                  <div>Participants in state: {participants.length}</div>
+                  <div>Participants data: {JSON.stringify(participants.map(p => ({ userId: p.userId, socketId: p.socketId?.slice(-4), displayName: p.displayName })))}</div>
+                  <div>Current user ID: {displayUser.id}</div>
+                  <div>Is Host: {isHost ? 'Yes' : 'No'}</div>
+                  <div>Socket connected: {MeetingSocket.isConnected ? 'Yes' : 'No'}</div>
+                  <button 
+                    onClick={() => console.log('Current participants:', participants)}
+                    className="bg-blue-500 text-white px-2 py-1 rounded text-xs mt-1 mr-1"
+                  >
+                    Log Participants
+                  </button>
+                  <button 
+                    onClick={() => {
+                      console.log('Manual sync attempt...');
+                      // Manually emit a request for current participants
+                      MeetingSocket.emit('get-participants', { meetingId });
+                      
+                      // Also try to get from VideoChat component data
+                      console.log('Checking VideoChat remote participants...');
+                      
+                      // Add a fake participant to test if UI updates
+                      const fakeParticipant = {
+                        socketId: 'manual-sync-' + Date.now(),
+                        userId: 'manual-user-' + Date.now(),
+                        displayName: 'Manual Sync Test',
+                        isMuted: false,
+                        isVideoOff: false
+                      };
+                      
+                      setParticipants(prev => [...prev, fakeParticipant]);
+                      console.log('Added fake participant for testing:', fakeParticipant);
+                    }}
+                    className="bg-orange-500 text-white px-2 py-1 rounded text-xs mt-1"
+                  >
+                    Manual Sync
+                  </button>
+                </div>
 
                 <div className="space-y-3 max-h-40 overflow-y-auto">
                   {/* Current User */}
@@ -961,9 +1359,14 @@ const MeetingRoom = ({ user }) => {
                   </div>
 
                   {/* Other Participants */}
-                  {participants.map((participant, index) => (
+                  {participants
+                    .filter((participant, index, self) => 
+                      // Remove duplicates by socketId
+                      index === self.findIndex(p => p.socketId === participant.socketId)
+                    )
+                    .map((participant, index) => (
                     <div
-                      key={participant.socketId}
+                      key={`participant-${participant.socketId}-${index}`}
                       className="flex items-center space-x-3 p-3 bg-white/5 rounded-xl border border-white/10 hover:bg-white/10 transition-colors"
                     >
                       <div className="w-10 h-10 bg-gradient-to-r from-gray-500 to-gray-600 rounded-full flex items-center justify-center font-bold text-sm">
@@ -973,17 +1376,80 @@ const MeetingRoom = ({ user }) => {
                         <span className="font-medium">
                           {participant.displayName}
                         </span>
-                        {participant.userId === user.id && (
+                        {(participant.userId === user.id || participant.userId === displayUser.id) && (
                           <span className="text-xs text-gray-400 ml-2">
                             (Your other session)
                           </span>
                         )}
                       </div>
+                      
+                      {/* Individual Participant Controls - Only show if current user is host */}
+                      {isHost && participant.userId !== user.id && participant.userId !== displayUser.id && (
+                        <div className="flex items-center space-x-1">
+                          {/* Mute/Unmute Button */}
+                          <button
+                            onClick={() => {
+                              console.log('Muting participant:', participant.userId);
+                              MeetingSocket.muteParticipant(meetingId, participant.userId, true);
+                            }}
+                            className="p-1 rounded-full bg-red-500/20 hover:bg-red-500/40 transition-colors"
+                            title="Mute participant"
+                          >
+                            <svg className="w-3 h-3 text-red-400" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217zM15.657 6.343a1 1 0 010 1.414L13.414 10l2.243 2.243a1 1 0 11-1.414 1.414L12 11.414l-2.243 2.243a1 1 0 01-1.414-1.414L10.586 10 8.343 7.757a1 1 0 011.414-1.414L12 8.586l2.243-2.243a1 1 0 011.414 0z" clipRule="evenodd" />
+                            </svg>
+                          </button>
+                          
+                          {/* Disable Video Button */}
+                          <button
+                            onClick={() => {
+                              console.log('Disabling video for participant:', participant.userId);
+                              MeetingSocket.disableParticipantVideo(participant.userId, true);
+                            }}
+                            className="p-1 rounded-full bg-orange-500/20 hover:bg-orange-500/40 transition-colors"
+                            title="Disable video"
+                          >
+                            <svg className="w-3 h-3 text-orange-400" fill="currentColor" viewBox="0 0 20 20">
+                              <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
+                              <path stroke="currentColor" strokeWidth="2" d="M4 14l8-8m0 8L4 6" />
+                            </svg>
+                          </button>
+                          
+                          {/* Remove Participant Button */}
+                          <button
+                            onClick={() => {
+                              if (confirm(`Remove ${participant.displayName} from the meeting?`)) {
+                                console.log('Removing participant:', participant.userId);
+                                MeetingSocket.removeParticipant(participant.userId);
+                              }
+                            }}
+                            className="p-1 rounded-full bg-gray-500/20 hover:bg-gray-500/40 transition-colors"
+                            title="Remove from meeting"
+                          >
+                            <svg className="w-3 h-3 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                            </svg>
+                          </button>
+                        </div>
+                      )}
+                      
                       <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
                     </div>
                   ))}
                 </div>
               </div>
+
+              {/* Host Controls Section */}
+              {isHost && (
+                <div className="mb-6">
+                  <HostControls 
+                    participants={participants}
+                    currentUser={displayUser}
+                    isHost={isHost}
+                    meetingId={meetingId}
+                  />
+                </div>
+              )}
             </div>
           </aside>
         )}

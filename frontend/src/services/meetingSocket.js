@@ -197,6 +197,33 @@ class MeetingSocket {
         console.log('MeetingSocket received message from server:', message);
         this.emit('message-received', message); // Forward to UI components
       });
+
+      // HOST CONTROL EVENT HANDLERS: Handle host control events
+      this.socket.on('participant-removed', (data) => {
+        console.log('MeetingSocket: Participant removed by host:', data);
+        this.emit('participant-removed', data); // Forward to UI components
+      });
+
+      this.socket.on('removed-from-meeting', (data) => {
+        console.log('MeetingSocket: Removed from meeting by host:', data);
+        this.emit('removed-from-meeting', data); // Forward to UI components
+      });
+
+      this.socket.on('host-action-success', (data) => {
+        console.log('MeetingSocket: Host action successful:', data);
+        this.emit('host-action-success', data); // Forward to UI components
+      });
+
+      // TEST EVENT HANDLERS: For debugging communication
+      this.socket.on('test-event', (data) => {
+        console.log('MeetingSocket: Test event received:', data);
+        this.emit('test-event', data); // Forward to UI components
+      });
+
+      this.socket.on('test-backend-response', (data) => {
+        console.log('MeetingSocket: Backend test response received:', data);
+        this.emit('test-backend-response', data); // Forward to UI components
+      });
       
     }); // End of Promise - All event handlers are now set up
   }
@@ -332,10 +359,12 @@ class MeetingSocket {
    * @param {Function} handler - Event handler function
    */
   on(event, handler) {
+    console.log(`🎯 MeetingSocket: Registering handler for event '${event}'`);
     if (!this.eventHandlers[event]) {
       this.eventHandlers[event] = [];
     }
     this.eventHandlers[event].push(handler);
+    console.log(`🎯 MeetingSocket: Now have ${this.eventHandlers[event].length} handlers for '${event}'`);
   }
 
   /**
@@ -360,9 +389,101 @@ class MeetingSocket {
    * @param {*} data - Event data
    */
   emit(event, data) {
+    console.log(`🚀 MeetingSocket: Emitting event '${event}' to ${this.eventHandlers[event]?.length || 0} handlers`);
     if (this.eventHandlers[event]) {
-      this.eventHandlers[event].forEach(handler => handler(data));
+      this.eventHandlers[event].forEach((handler, index) => {
+        console.log(`🚀 MeetingSocket: Calling handler ${index + 1} for '${event}'`);
+        try {
+          handler(data);
+        } catch (error) {
+          console.error(`❌ Error in handler ${index + 1} for '${event}':`, error);
+        }
+      });
+    } else {
+      console.log(`⚠️ MeetingSocket: No handlers registered for event '${event}'`);
     }
+  }
+
+  /**
+   * HOST CONTROLS - Remove participant from meeting
+   * @param {string} targetUserId - User ID to remove
+   */
+  removeParticipant(targetUserId) {
+    console.log('🚨 MeetingSocket.removeParticipant called with:', {
+      targetUserId,
+      isConnected: this.isConnected,
+      meetingId: this.meetingId,
+      socketId: this.socket?.id
+    });
+    
+    if (!this.isConnected || !this.meetingId) {
+      console.error('❌ Cannot remove participant - not connected or no meeting ID');
+      throw new Error('Not connected to meeting');
+    }
+    
+    // First test if basic communication works
+    console.log('🧪 Testing basic socket communication...');
+    this.socket.emit('test-frontend-event', { 
+      message: 'Testing communication from frontend',
+      timestamp: new Date().toISOString()
+    });
+    
+    // Then try the actual host control
+    console.log('📤 Emitting host-remove-participant event to backend');
+    this.socket.emit('host-remove-participant', {
+      meetingId: this.meetingId,
+      targetUserId
+    });
+    console.log('✅ host-remove-participant event emitted');
+  }
+
+  /**
+   * HOST CONTROLS - Block participant from rejoining
+   * @param {string} targetUserId - User ID to block
+   */
+  blockParticipant(targetUserId) {
+    if (!this.isConnected || !this.meetingId) {
+      throw new Error('Not connected to meeting');
+    }
+    
+    this.socket.emit('host-block-participant', {
+      meetingId: this.meetingId,
+      targetUserId
+    });
+  }
+
+  /**
+   * HOST CONTROLS - Force mute/unmute participant
+   * @param {string} targetUserId - User ID to control
+   * @param {boolean} isForceMuted - Whether to force mute
+   */
+  muteParticipant(targetUserId, isForceMuted) {
+    if (!this.isConnected || !this.meetingId) {
+      throw new Error('Not connected to meeting');
+    }
+    
+    this.socket.emit('host-mute-participant', {
+      meetingId: this.meetingId,
+      targetUserId,
+      isForceMuted
+    });
+  }
+
+  /**
+   * HOST CONTROLS - Disable/enable participant video
+   * @param {string} targetUserId - User ID to control
+   * @param {boolean} isVideoDisabled - Whether to disable video
+   */
+  disableParticipantVideo(targetUserId, isVideoDisabled) {
+    if (!this.isConnected || !this.meetingId) {
+      throw new Error('Not connected to meeting');
+    }
+    
+    this.socket.emit('host-disable-video', {
+      meetingId: this.meetingId,
+      targetUserId,
+      isVideoDisabled
+    });
   }
 
   /**

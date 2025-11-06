@@ -76,7 +76,43 @@ const meetingSchema = new mongoose.Schema({
             type: Boolean,
             default: true
         }
-    }
+    },
+    blockedParticipants: [{
+        userId: {
+            type: String,
+            required: true
+        },
+        blockedAt: {
+            type: Date,
+            default: Date.now
+        },
+        blockedBy: {
+            type: String,
+            required: true
+        }
+    }],
+    participantControls: [{
+        userId: {
+            type: String,
+            required: true
+        },
+        isForceMuted: {
+            type: Boolean,
+            default: false
+        },
+        isVideoDisabled: {
+            type: Boolean,
+            default: false
+        },
+        controlledBy: {
+            type: String,
+            required: true
+        },
+        controlledAt: {
+            type: Date,
+            default: Date.now
+        }
+    }]
 }, { timestamps: true });
 
 export default mongoose.model('Meeting', meetingSchema);
