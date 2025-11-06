@@ -283,10 +283,20 @@ const MeetingRoom = ({ user }) => {
               console.log("🎯 WRAPPER: Custom event (silent):", data);
             });
 
-            // Silent wrapper listener for removed-from-meeting (service tracking only)
+            // ACTIVE wrapper listener for removed-from-meeting (backup handler)
             MeetingSocket.on("removed-from-meeting", (data) => {
-              console.log("🚨 WRAPPER: Removed from meeting (silent):", data);
-              // No alert - let direct listener handle UI
+              console.log("🚨 WRAPPER: Processing removal from meeting:", data);
+              
+              // Clean up and redirect
+              setParticipants([]);
+              setMeeting(null);
+              MeetingSocket.leaveMeeting();
+              
+              alert(`You have been removed from the meeting by the host`);
+              
+              setTimeout(() => {
+                navigate("/dashboard");
+              }, 1000);
             });
             
           } else {
@@ -488,25 +498,37 @@ const MeetingRoom = ({ user }) => {
       }
     });
 
-    // Host control event listeners
+    // Host control event listeners - Multiple handlers for reliability
     MeetingSocket.socket.on("removed-from-meeting", (data) => {
       console.log("🚨 DIRECT: YOU have been removed from meeting by host:", data);
+      handleRemovalFromMeeting(data.message);
+    });
+
+    // Backup handler with custom event
+    MeetingSocket.socket.on("FORCE-DISCONNECT", (data) => {
+      console.log("🚨 FORCE-DISCONNECT: Processing forced removal:", data);
+      handleRemovalFromMeeting(data.message);
+    });
+
+    // Common removal handler
+    const handleRemovalFromMeeting = (message) => {
+      console.log("🚫 Processing removal from meeting");
       
-      // Show clear notification
-      alert(`🚫 REMOVED FROM MEETING\n\n${data.message || "You have been removed from the meeting"}\n\nYou will be redirected to the dashboard.`);
+      // Show notification
+      alert(`🚫 REMOVED FROM MEETING\n\n${message || "You have been removed from the meeting"}\n\nYou will be redirected to the dashboard.`);
       
-      // Clean up local state
+      // Clean up local state immediately
       setParticipants([]);
       setMeeting(null);
       
       // Leave meeting socket
       MeetingSocket.leaveMeeting();
       
-      // Navigate with a small delay to ensure cleanup
+      // Navigate with delay to ensure cleanup
       setTimeout(() => {
         navigate("/dashboard");
       }, 1000);
-    });
+    };
 
     // Debug socket connection
     console.log("🔍 Frontend socket info:", {

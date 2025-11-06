@@ -511,12 +511,27 @@ const meetingSocket = (io) => {
           const targetSocket = meetingNamespace.sockets.get(targetSocketId);
           
           if (targetSocket) {
-            // STEP 1: Send removal notice DIRECTLY to target user (highest priority)
-            console.log(`📤 DIRECT: Sending removed-from-meeting to ${targetSocketId}`);
+            // STEP 1: Send removal notice MULTIPLE ways to ensure delivery
+            console.log(`📤 MULTI-CHANNEL: Sending removed-from-meeting to ${targetSocketId}`);
+            
+            // Method 1: Direct to socket
             targetSocket.emit("removed-from-meeting", {
               message: "You have been removed from the meeting by the host",
               meetingId: meetingId,
               timestamp: new Date().toISOString()
+            });
+            
+            // Method 2: Through namespace to target socket
+            meetingNamespace.to(targetSocketId).emit("removed-from-meeting", {
+              message: "You have been removed from the meeting by the host",
+              meetingId: meetingId,
+              timestamp: new Date().toISOString()
+            });
+            
+            // Method 3: Custom event as backup
+            targetSocket.emit("FORCE-DISCONNECT", {
+              reason: "removed-by-host",
+              message: "You have been removed from the meeting by the host"
             });
 
             // STEP 2: Wait a moment to ensure message is received
