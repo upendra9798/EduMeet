@@ -780,10 +780,22 @@ const meetingSocket = (io) => {
         }
 
         if (targetSocketId) {
-          meetingNamespace.to(targetSocketId).emit("host-control-audio", {
+          const hostControlData = {
             isForceMuted,
             controlledBy: userSession.userId
-          });
+          };
+          console.log(`🚨 SENDING host-control-audio to socket ${targetSocketId}:`, hostControlData);
+          meetingNamespace.to(targetSocketId).emit("host-control-audio", hostControlData);
+          
+          // Also try direct socket emission as backup
+          const targetSocket = meetingNamespace.sockets.get(targetSocketId);
+          if (targetSocket) {
+            console.log(`🚨 DIRECT EMIT: host-control-audio to socket ${targetSocketId}`);
+            targetSocket.emit("host-control-audio", hostControlData);
+            targetSocket.emit("host-control-audio-direct", hostControlData);
+          }
+        } else {
+          console.log(`❌ Could not find target socket for user ${targetUserId}`);
         }
 
         // Notify other participants
@@ -870,10 +882,22 @@ const meetingSocket = (io) => {
         }
 
         if (targetSocketId) {
-          meetingNamespace.to(targetSocketId).emit("host-control-video", {
+          const hostControlData = {
             isVideoDisabled,
             controlledBy: userSession.userId
-          });
+          };
+          console.log(`🚨 SENDING host-control-video to socket ${targetSocketId}:`, hostControlData);
+          meetingNamespace.to(targetSocketId).emit("host-control-video", hostControlData);
+          
+          // Also try direct socket emission as backup
+          const targetSocket = meetingNamespace.sockets.get(targetSocketId);
+          if (targetSocket) {
+            console.log(`🚨 DIRECT EMIT: host-control-video to socket ${targetSocketId}`);
+            targetSocket.emit("host-control-video", hostControlData);
+            targetSocket.emit("host-control-video-direct", hostControlData);
+          }
+        } else {
+          console.log(`❌ Could not find target socket for user ${targetUserId}`);
         }
 
         // Notify other participants

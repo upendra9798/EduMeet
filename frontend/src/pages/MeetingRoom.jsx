@@ -304,6 +304,35 @@ const MeetingRoom = ({ user }) => {
             // IMMEDIATE CHECK: Verify handler was registered
             console.log("🔍 IMMEDIATE CHECK: Handlers for participant-audio-toggled:", MeetingSocket.eventHandlers?.['participant-audio-toggled']?.length || 0);
             console.log("🔍 IMMEDIATE CHECK: All registered events:", Object.keys(MeetingSocket.eventHandlers || {}));
+            
+            // WRAPPER HOST CONTROL LISTENERS
+            MeetingSocket.on("host-control-audio", (data) => {
+              console.log("🚨 WRAPPER: Host control audio received:", data);
+              if (data.isForceMuted) {
+                console.log("🔇 WRAPPER: Force muting local participant");
+                setIsMuted(true);
+                if (localStream) {
+                  localStream.getAudioTracks().forEach(track => {
+                    track.enabled = false;
+                  });
+                }
+                alert(`🔇 You have been muted by the host`);
+              }
+            });
+
+            MeetingSocket.on("host-control-video", (data) => {
+              console.log("🚨 WRAPPER: Host control video received:", data);
+              if (data.isVideoDisabled) {
+                console.log("📹 WRAPPER: Force disabling local participant video");
+                setIsVideoOff(true);
+                if (localStream) {
+                  localStream.getVideoTracks().forEach(track => {
+                    track.enabled = false;
+                  });
+                }
+                alert(`📹 Your video has been disabled by the host`);
+              }
+            });
 
             MeetingSocket.on("participant-video-toggled", (data) => {
               console.log("📹 WRAPPER: Video toggled received:", data);
@@ -648,30 +677,40 @@ const MeetingRoom = ({ user }) => {
     // NOTE: Removed duplicate direct handlers - wrapper listeners handle these events
 
     MeetingSocket.socket.on("host-control-audio", (data) => {
-      console.log("MeetingRoom: Host controlled audio:", data);
+      console.log("🚨🚨🚨 MeetingRoom: HOST CONTROLLED YOUR AUDIO:", data);
+      alert(`🚨 HOST CONTROL: Your audio is being controlled!`);
+      
       if (data.isForceMuted) {
+        console.log("🔇 FORCE MUTING LOCAL PARTICIPANT");
         // Force mute the local participant
         setIsMuted(true);
         if (localStream) {
           localStream.getAudioTracks().forEach(track => {
             track.enabled = false;
+            console.log("🔇 Disabled audio track:", track);
           });
         }
-        console.log(`You have been muted by the host`);
+        alert(`🔇 You have been muted by the host`);
+        console.log(`🔇 You have been muted by the host`);
       }
     });
 
     MeetingSocket.socket.on("host-control-video", (data) => {
-      console.log("MeetingRoom: Host controlled video:", data);
+      console.log("🚨🚨🚨 MeetingRoom: HOST CONTROLLED YOUR VIDEO:", data);
+      alert(`🚨 HOST CONTROL: Your video is being controlled!`);
+      
       if (data.isVideoDisabled) {
+        console.log("📹 FORCE DISABLING LOCAL PARTICIPANT VIDEO");
         // Force disable video for the local participant
         setIsVideoOff(true);
         if (localStream) {
           localStream.getVideoTracks().forEach(track => {
             track.enabled = false;
+            console.log("📹 Disabled video track:", track);
           });
         }
-        console.log(`Your video has been disabled by the host`);
+        alert(`📹 Your video has been disabled by the host`);
+        console.log(`📹 Your video has been disabled by the host`);
       }
     });
 
@@ -697,7 +736,45 @@ const MeetingRoom = ({ user }) => {
 
     MeetingSocket.socket.on("host-action-success", (data) => {
       console.log("MeetingRoom: Host action successful:", data);
-      // You can add UI feedback here if needed
+      
+      // Provide user feedback based on the action
+      if (data.action === 'mute-participant') {
+        console.log(`✅ Successfully muted participant ${data.targetUserId}`);
+        alert(`✅ Participant has been muted!`);
+      } else if (data.action === 'disable-video') {
+        console.log(`✅ Successfully disabled video for participant ${data.targetUserId}`);
+        alert(`✅ Participant's video has been disabled!`);
+      } else if (data.action === 'remove-participant') {
+        console.log(`✅ Successfully removed participant ${data.targetUserId}`);
+        alert(`✅ Participant has been removed from the meeting!`);
+      }
+    });
+
+    // DIRECT HOST CONTROL LISTENERS (backup)
+    MeetingSocket.socket.on("host-control-audio-direct", (data) => {
+      console.log("🚨🚨🚨 DIRECT: Host control audio received:", data);
+      alert(`🚨 DIRECT HOST CONTROL: Your audio!`);
+      if (data.isForceMuted) {
+        setIsMuted(true);
+        if (localStream) {
+          localStream.getAudioTracks().forEach(track => {
+            track.enabled = false;
+          });
+        }
+      }
+    });
+
+    MeetingSocket.socket.on("host-control-video-direct", (data) => {
+      console.log("🚨🚨🚨 DIRECT: Host control video received:", data);
+      alert(`🚨 DIRECT HOST CONTROL: Your video!`);
+      if (data.isVideoDisabled) {
+        setIsVideoOff(true);
+        if (localStream) {
+          localStream.getVideoTracks().forEach(track => {
+            track.enabled = false;
+          });
+        }
+      }
     });
 
     // NOTE: Removed duplicate direct audio/video listeners - wrapper listeners handle these
@@ -868,6 +945,45 @@ const MeetingRoom = ({ user }) => {
         alert("Failed to end meeting: " + err.message);
       }
     }
+  };
+
+  // Host control functions
+  const hostMuteParticipant = (participantId) => {
+    if (!isHost) {
+      alert("Only the host can mute participants");
+      return;
+    }
+    
+    const participant = participants.find(p => p.userId === participantId);
+    const participantName = participant?.displayName || 'participant';
+    
+    console.log("🔇 HOST: Force muting participant:", participantId);
+    alert(`🔇 Force muting ${participantName}...`);
+    
+    MeetingSocket.socket.emit('host-mute-participant', {
+      meetingId: meetingId,
+      targetUserId: participantId,
+      isForceMuted: true  // Force mute the participant
+    });
+  };
+
+  const hostDisableVideo = (participantId) => {
+    if (!isHost) {
+      alert("Only the host can disable participant video");
+      return;
+    }
+    
+    const participant = participants.find(p => p.userId === participantId);
+    const participantName = participant?.displayName || 'participant';
+    
+    console.log("📹 HOST: Force disabling video for participant:", participantId);
+    alert(`📹 Force disabling video for ${participantName}...`);
+    
+    MeetingSocket.socket.emit('host-disable-video', {
+      meetingId: meetingId,
+      targetUserId: participantId,
+      isVideoDisabled: true  // Force disable video
+    });
   };
 
   // Test function to verify socket communication and room membership
@@ -1517,11 +1633,10 @@ const MeetingRoom = ({ user }) => {
                           {/* Mute/Unmute Button */}
                           <button
                             onClick={() => {
-                              console.log('Muting participant:', participant.userId);
-                              MeetingSocket.muteParticipant(meetingId, participant.userId, true);
+                              hostMuteParticipant(participant.userId);
                             }}
                             className="p-1 rounded-full bg-red-500/20 hover:bg-red-500/40 transition-colors"
-                            title="Mute participant"
+                            title="Force mute participant"
                           >
                             <svg className="w-3 h-3 text-red-400" fill="currentColor" viewBox="0 0 20 20">
                               <path fillRule="evenodd" d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217zM15.657 6.343a1 1 0 010 1.414L13.414 10l2.243 2.243a1 1 0 11-1.414 1.414L12 11.414l-2.243 2.243a1 1 0 01-1.414-1.414L10.586 10 8.343 7.757a1 1 0 011.414-1.414L12 8.586l2.243-2.243a1 1 0 011.414 0z" clipRule="evenodd" />
@@ -1531,11 +1646,10 @@ const MeetingRoom = ({ user }) => {
                           {/* Disable Video Button */}
                           <button
                             onClick={() => {
-                              console.log('Disabling video for participant:', participant.userId);
-                              MeetingSocket.disableParticipantVideo(participant.userId, true);
+                              hostDisableVideo(participant.userId);
                             }}
                             className="p-1 rounded-full bg-orange-500/20 hover:bg-orange-500/40 transition-colors"
-                            title="Disable video"
+                            title="Force disable video"
                           >
                             <svg className="w-3 h-3 text-orange-400" fill="currentColor" viewBox="0 0 20 20">
                               <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />

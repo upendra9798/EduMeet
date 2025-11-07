@@ -244,6 +244,27 @@ class MeetingSocket {
         console.log('MeetingSocket: Direct audio toggled event received:', data);
         this.emit('participant-audio-toggled-direct', data); // Forward to UI components
       });
+
+      // HOST CONTROL EVENT HANDLERS
+      this.socket.on('host-control-audio', (data) => {
+        console.log('MeetingSocket: Host control audio received:', data);
+        this.emit('host-control-audio', data); // Forward to UI components
+      });
+
+      this.socket.on('host-control-video', (data) => {
+        console.log('MeetingSocket: Host control video received:', data);
+        this.emit('host-control-video', data); // Forward to UI components
+      });
+
+      this.socket.on('participant-audio-controlled', (data) => {
+        console.log('MeetingSocket: Participant audio controlled received:', data);
+        this.emit('participant-audio-controlled', data); // Forward to UI components
+      });
+
+      this.socket.on('participant-video-controlled', (data) => {
+        console.log('MeetingSocket: Participant video controlled received:', data);
+        this.emit('participant-video-controlled', data); // Forward to UI components
+      });
       
     }); // End of Promise - All event handlers are now set up
   }
