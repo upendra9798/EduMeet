@@ -305,6 +305,32 @@ const MeetingRoom = ({ user }) => {
             console.log("🔍 IMMEDIATE CHECK: Handlers for participant-audio-toggled:", MeetingSocket.eventHandlers?.['participant-audio-toggled']?.length || 0);
             console.log("🔍 IMMEDIATE CHECK: All registered events:", Object.keys(MeetingSocket.eventHandlers || {}));
             
+            // WRAPPER CHAT LISTENER - Register with MeetingSocket service
+            MeetingSocket.on("message-received", (message) => {
+              console.log("🎬 WRAPPER: Chat message received:", message);
+              try {
+                if (!message || typeof message !== 'object') {
+                  console.error("Invalid message received:", message);
+                  return;
+                }
+                
+                // Add received message to chat (mark as not own)
+                const receivedMessage = {
+                  id: message.id || Date.now(),
+                  text: message.text,
+                  sender: message.sender,
+                  senderId: message.senderId,
+                  timestamp: message.timestamp || new Date().toISOString(),
+                  isOwn: false
+                };
+                
+                console.log("🎬 WRAPPER: Adding message to chat:", receivedMessage);
+                setMessages(prev => [...prev, receivedMessage]);
+              } catch (error) {
+                console.error("Error processing received message:", error);
+              }
+            });
+
             // WRAPPER HOST CONTROL LISTENERS
             MeetingSocket.on("host-control-audio", (data) => {
               console.log("🚨 WRAPPER: Host control audio received:", data);
