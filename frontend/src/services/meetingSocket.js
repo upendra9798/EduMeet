@@ -224,6 +224,26 @@ class MeetingSocket {
         console.log('MeetingSocket: Backend test response received:', data);
         this.emit('test-backend-response', data); // Forward to UI components
       });
+
+      this.socket.on('debug-room-response', (data) => {
+        console.log('MeetingSocket: Debug room response received:', data);
+        this.emit('debug-room-response', data); // Forward to UI components
+      });
+
+      this.socket.on('participant-audio-toggled', (data) => {
+        console.log('MeetingSocket: Audio toggled event received:', data);
+        this.emit('participant-audio-toggled', data); // Forward to UI components
+      });
+
+      this.socket.on('participant-video-toggled', (data) => {
+        console.log('MeetingSocket: Video toggled event received:', data);
+        this.emit('participant-video-toggled', data); // Forward to UI components
+      });
+
+      this.socket.on('participant-audio-toggled-direct', (data) => {
+        console.log('MeetingSocket: Direct audio toggled event received:', data);
+        this.emit('participant-audio-toggled-direct', data); // Forward to UI components
+      });
       
     }); // End of Promise - All event handlers are now set up
   }

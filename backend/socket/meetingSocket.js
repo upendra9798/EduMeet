@@ -362,8 +362,48 @@ const meetingSocket = (io) => {
       }
     });
 
+    // Test event handlers
+    socket.on('test-frontend-event', (data) => {
+      console.log("🧪 TEST: Received from frontend:", data);
+      socket.emit('test-backend-response', { message: "Backend received your test", received: data });
+    });
+
+    socket.on('debug-room-info', async (data) => {
+      try {
+        console.log("🧪 ROOM INFO: Request from socket:", socket.id, "for meeting:", data.meetingId);
+        
+        const rooms = Array.from(socket.rooms);
+        console.log("🧪 ROOM INFO: Socket rooms:", rooms);
+        
+        const roomId = `meeting-${data.meetingId}`;
+        const isInRoom = socket.rooms.has(roomId);
+        console.log("🧪 ROOM INFO: Is in target room?", isInRoom, "Target room:", roomId);
+        
+        // Get all sockets in the room
+        const socketsInRoom = await meetingNamespace.in(roomId).fetchSockets();
+        console.log("🧪 ROOM INFO: Sockets in room:", socketsInRoom.map(s => s.id));
+        
+        socket.emit('debug-room-response', {
+          socketId: socket.id,
+          rooms: rooms,
+          targetRoom: roomId,
+          isInTargetRoom: isInRoom,
+          socketsInTargetRoom: socketsInRoom.map(s => s.id)
+        });
+        
+      } catch (error) {
+        console.error("🧪 ROOM INFO ERROR:", error);
+        socket.emit('debug-room-response', { error: error.message });
+      }
+    });
+
     // Handle audio toggle events
     socket.on("toggle-audio", (data) => {
+      console.log('🔊🔊🔊 BACKEND: RECEIVED TOGGLE-AUDIO EVENT 🔊🔊🔊');
+      console.log('Socket ID:', socket.id);
+      console.log('Data:', data);
+      console.log('User session:', userMeetings[socket.id]);
+      
       try {
         const { meetingId, isMuted } = data;
         
@@ -376,12 +416,33 @@ const meetingSocket = (io) => {
 
         const roomId = `meeting-${meetingId}`;
         
-        // Broadcast audio status to other participants
-        socket.to(roomId).emit("participant-audio-toggled", {
+        // Broadcast audio status to ALL participants (including sender)
+        const audioToggleData = {
           socketId: socket.id,
           isMuted: isMuted,
           participantId: userSession.userId
+        };
+        
+        console.log(`📢 Broadcasting participant-audio-toggled to room ${roomId}:`, audioToggleData);
+        
+        // ENHANCED DEBUG: Check who's actually in the room before broadcasting
+        meetingNamespace.in(roomId).fetchSockets().then(sockets => {
+          console.log(`🎯 SOCKETS IN ROOM ${roomId}:`, sockets.map(s => s.id));
+          console.log(`🎯 ABOUT TO BROADCAST TO ${sockets.length} SOCKETS`);
+          
+          // Broadcast to room (all participants)
+          meetingNamespace.to(roomId).emit("participant-audio-toggled", audioToggleData);
+          console.log(`🎯 BROADCAST SENT!`);
+          
+          // Also send direct to each socket for debugging
+          sockets.forEach(targetSocket => {
+            console.log(`🎯 DIRECT EMIT to socket ${targetSocket.id}`);
+            targetSocket.emit("participant-audio-toggled-direct", audioToggleData);
+          });
         });
+        
+        // ALSO send directly to sender to ensure they get their own update
+        socket.emit("participant-audio-toggled", audioToggleData);
         
         console.log(`🔊 User ${socket.id} ${isMuted ? 'muted' : 'unmuted'} audio in meeting ${meetingId}`);
         
@@ -392,6 +453,12 @@ const meetingSocket = (io) => {
 
     // Handle video toggle events
     socket.on("toggle-video", (data) => {
+      console.log('📹 Backend: Received toggle-video event:', {
+        socketId: socket.id,
+        data,
+        userSession: userMeetings[socket.id]
+      });
+      
       try {
         const { meetingId, isVideoOff } = data;
         
@@ -404,12 +471,20 @@ const meetingSocket = (io) => {
 
         const roomId = `meeting-${meetingId}`;
         
-        // Broadcast video status to other participants
-        socket.to(roomId).emit("participant-video-toggled", {
+        // Broadcast video status to ALL participants (including sender)
+        const videoToggleData = {
           socketId: socket.id,
           isVideoOff: isVideoOff,
           participantId: userSession.userId
-        });
+        };
+        
+        console.log(`📢 Broadcasting participant-video-toggled to room ${roomId}:`, videoToggleData);
+        
+        // Broadcast to room (all participants) 
+        meetingNamespace.to(roomId).emit("participant-video-toggled", videoToggleData);
+        
+        // ALSO send directly to sender to ensure they get their own update
+        socket.emit("participant-video-toggled", videoToggleData);
         
         console.log(`📹 User ${socket.id} ${isVideoOff ? 'turned off' : 'turned on'} video in meeting ${meetingId}`);
         

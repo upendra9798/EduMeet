@@ -283,6 +283,41 @@ const MeetingRoom = ({ user }) => {
               console.log("🎯 WRAPPER: Custom event (silent):", data);
             });
 
+            // Audio/Video status wrapper listeners
+            console.log("🎵 REGISTERING: participant-audio-toggled handler");
+            MeetingSocket.on("participant-audio-toggled", (data) => {
+              console.log("🔊🔊🔊 MAIN HANDLER: Audio toggled received:", data);
+              console.log("🔊 Updating participant with socketId:", data.socketId, "to isMuted:", data.isMuted);
+              setParticipants(prev => {
+                console.log("🔊 Current participants before update:", prev.map(p => ({ socketId: p.socketId, isMuted: p.isMuted })));
+                const updated = prev.map(p => 
+                  p.socketId === data.socketId 
+                    ? { ...p, isMuted: data.isMuted }
+                    : p
+                );
+                console.log("🔊 Updated participants after audio toggle:", updated.map(p => ({ socketId: p.socketId, isMuted: p.isMuted })));
+                return updated;
+              });
+            });
+            console.log("🎵 REGISTERED: participant-audio-toggled handler completed");
+            
+            // IMMEDIATE CHECK: Verify handler was registered
+            console.log("🔍 IMMEDIATE CHECK: Handlers for participant-audio-toggled:", MeetingSocket.eventHandlers?.['participant-audio-toggled']?.length || 0);
+            console.log("🔍 IMMEDIATE CHECK: All registered events:", Object.keys(MeetingSocket.eventHandlers || {}));
+
+            MeetingSocket.on("participant-video-toggled", (data) => {
+              console.log("📹 WRAPPER: Video toggled received:", data);
+              setParticipants(prev => {
+                const updated = prev.map(p => 
+                  p.socketId === data.socketId 
+                    ? { ...p, isVideoOff: data.isVideoOff }
+                    : p
+                );
+                console.log("📹 Updated participants after video toggle:", updated.map(p => ({ socketId: p.socketId, isVideoOff: p.isVideoOff })));
+                return updated;
+              });
+            });
+
             // ACTIVE wrapper listener for removed-from-meeting (backup handler)
             MeetingSocket.on("removed-from-meeting", (data) => {
               console.log("🚨 WRAPPER: Processing removal from meeting:", data);
@@ -557,10 +592,56 @@ const MeetingRoom = ({ user }) => {
       socketConnected: MeetingSocket.socket?.connected
     });
 
+    // Test event listeners
+    MeetingSocket.on('test-backend-response', (data) => {
+      console.log("🧪 TEST: Response from backend:", data);
+    });
+
+    MeetingSocket.on('debug-room-response', (data) => {
+      console.log("🧪 ROOM RESPONSE:", data);
+    });
+
+    // CRITICAL TEST: Add explicit listeners for the audio/video events
+    MeetingSocket.on('participant-audio-toggled', (data) => {
+      console.log("🎯 WRAPPER: participant-audio-toggled received:", data);
+    });
+
+    MeetingSocket.socket.on('participant-audio-toggled', (data) => {
+      console.log("🎯 DIRECT: participant-audio-toggled received:", data);
+    });
+
+    MeetingSocket.on('participant-video-toggled', (data) => {
+      console.log("🎯 WRAPPER: participant-video-toggled received:", data);
+    });
+
+    MeetingSocket.socket.on('participant-video-toggled', (data) => {
+      console.log("🎯 DIRECT: participant-video-toggled received:", data);
+    });
+
+    // Test direct emission (should always work if socket is connected)
+    MeetingSocket.on('participant-audio-toggled-direct', (data) => {
+      console.log("🎯🎯🎯 WRAPPER DIRECT EMIT: participant-audio-toggled-direct received:", data);
+    });
+
+    MeetingSocket.socket.on('participant-audio-toggled-direct', (data) => {
+      console.log("🎯🎯🎯 SOCKET DIRECT EMIT: participant-audio-toggled-direct received:", data);
+    });
+
+    // Debug: Check the current state of event handlers
+    console.log("🔍 MeetingSocket eventHandlers state:", Object.keys(MeetingSocket.eventHandlers || {}));
+    console.log("🔍 Handlers for participant-audio-toggled-direct:", MeetingSocket.eventHandlers?.['participant-audio-toggled-direct']?.length || 0);
+
     // Test with ANY event first
     MeetingSocket.socket.onAny((eventName, ...args) => {
       console.log("� DIRECT: ANY EVENT RECEIVED:", eventName, args);
       // No alerts - just monitoring events
+    });
+
+    // Additional event monitoring for audio/video events
+    MeetingSocket.socket.onAny((eventName, ...args) => {
+      if (eventName.includes('audio') || eventName.includes('video')) {
+        console.log("🎯🎯🎯 AUDIO/VIDEO EVENT RECEIVED:", eventName, args);
+      }
     });
 
     // Also register specific handlers
@@ -619,24 +700,7 @@ const MeetingRoom = ({ user }) => {
       // You can add UI feedback here if needed
     });
 
-    // Listen for participant audio/video toggle events to update participant status
-    MeetingSocket.socket.on("participant-audio-toggled", (data) => {
-      console.log("MeetingRoom: Participant audio toggled:", data);
-      setParticipants(prev => prev.map(p => 
-        p.socketId === data.socketId 
-          ? { ...p, isMuted: data.isMuted }
-          : p
-      ));
-    });
-
-    MeetingSocket.socket.on("participant-video-toggled", (data) => {
-      console.log("MeetingRoom: Participant video toggled:", data);
-      setParticipants(prev => prev.map(p => 
-        p.socketId === data.socketId 
-          ? { ...p, isVideoOff: data.isVideoOff }
-          : p
-      ));
-    });
+    // NOTE: Removed duplicate direct audio/video listeners - wrapper listeners handle these
   };
 
   // Handle leaving the meeting
@@ -806,6 +870,43 @@ const MeetingRoom = ({ user }) => {
     }
   };
 
+  // Test function to verify socket communication and room membership
+  const testAudioToggle = () => {
+    console.log("🧪 TEST: Starting comprehensive communication test");
+    
+    if (!MeetingSocket?.socket?.connected) {
+      console.error("🧪 TEST: Socket not connected");
+      return;
+    }
+    
+    console.log("🧪 TEST: Socket details:", {
+      socketId: MeetingSocket.socket.id,
+      connected: MeetingSocket.socket.connected,
+      meetingId: meetingId
+    });
+    
+    // Test 1: Basic communication
+    console.log("🧪 TEST 1: Testing basic communication");
+    MeetingSocket.socket.emit("test-frontend-event", { message: "Testing from frontend" });
+    
+    // Test 2: Request room info
+    setTimeout(() => {
+      console.log("🧪 TEST 2: Requesting room membership info");
+      MeetingSocket.socket.emit("debug-room-info", { meetingId: meetingId });
+    }, 500);
+    
+    // Test 3: Audio toggle
+    setTimeout(() => {
+      console.log("🧪 TEST 3: Testing audio toggle");
+      const testData = {
+        meetingId: meetingId,
+        isMuted: !isMuted
+      };
+      console.log("🧪 TEST: Sending toggle-audio event:", testData);
+      MeetingSocket.socket.emit("toggle-audio", testData);
+    }, 1000);
+  };
+
   // Media control functions
   const toggleMute = () => {
     console.log(
@@ -814,28 +915,39 @@ const MeetingRoom = ({ user }) => {
       "localStream:",
       localStream
     );
+    
+    // Always toggle the muted state
+    const newMutedState = !isMuted;
+    setIsMuted(newMutedState);
+    console.log("Muted state changed to:", newMutedState);
+    
+    // Apply to local stream if available
     if (localStream) {
       const audioTracks = localStream.getAudioTracks();
       console.log("Audio tracks found:", audioTracks.length);
       audioTracks.forEach((track, index) => {
         console.log(`Audio track ${index} - enabled before:`, track.enabled);
-        track.enabled = isMuted; // If currently muted, enable; if not muted, disable
+        track.enabled = !newMutedState; // If muted, disable tracks; if unmuted, enable tracks
         console.log(`Audio track ${index} - enabled after:`, track.enabled);
       });
-      const newMutedState = !isMuted;
-      setIsMuted(newMutedState);
-      console.log("Muted state changed to:", newMutedState);
-      
-      // Broadcast audio status to other participants
-      if (MeetingSocket?.socket?.connected) {
-        MeetingSocket.socket.emit("toggle-audio", {
-          meetingId,
-          isMuted: newMutedState
-        });
-        console.log("Audio toggle status sent to server:", newMutedState);
-      }
     } else {
-      console.warn("No local stream available for audio control");
+      console.log("No local stream - state change only, will apply when stream is available");
+    }
+    
+    // Always broadcast audio status to other participants
+    if (MeetingSocket?.socket?.connected) {
+      const audioData = {
+        meetingId,
+        isMuted: newMutedState
+      };
+      console.log("🔊 Frontend: Emitting toggle-audio to backend:", audioData);
+      MeetingSocket.socket.emit("toggle-audio", audioData);
+      console.log("✅ Audio toggle status sent to server");
+    } else {
+      console.error("❌ Cannot emit audio toggle - socket not connected:", {
+        socket: MeetingSocket?.socket,
+        connected: MeetingSocket?.socket?.connected
+      });
     }
   };
 
@@ -846,28 +958,39 @@ const MeetingRoom = ({ user }) => {
       "localStream:",
       localStream
     );
+    
+    // Always toggle the video state
+    const newVideoOffState = !isVideoOff;
+    setIsVideoOff(newVideoOffState);
+    console.log("Video off state changed to:", newVideoOffState);
+    
+    // Apply to local stream if available
     if (localStream) {
       const videoTracks = localStream.getVideoTracks();
       console.log("Video tracks found:", videoTracks.length);
       videoTracks.forEach((track, index) => {
         console.log(`Video track ${index} - enabled before:`, track.enabled);
-        track.enabled = isVideoOff; // If currently off, enable; if on, disable
+        track.enabled = !newVideoOffState; // If video off, disable tracks; if video on, enable tracks
         console.log(`Video track ${index} - enabled after:`, track.enabled);
       });
-      const newVideoOffState = !isVideoOff;
-      setIsVideoOff(newVideoOffState);
-      console.log("Video off state changed to:", newVideoOffState);
-      
-      // Broadcast video status to other participants
-      if (MeetingSocket?.socket?.connected) {
-        MeetingSocket.socket.emit("toggle-video", {
-          meetingId,
-          isVideoOff: newVideoOffState
-        });
-        console.log("Video toggle status sent to server:", newVideoOffState);
-      }
     } else {
-      console.warn("No local stream available for video control");
+      console.log("No local stream - state change only, will apply when stream is available");
+    }
+    
+    // Always broadcast video status to other participants
+    if (MeetingSocket?.socket?.connected) {
+      const videoData = {
+        meetingId,
+        isVideoOff: newVideoOffState
+      };
+      console.log("📹 Frontend: Emitting toggle-video to backend:", videoData);
+      MeetingSocket.socket.emit("toggle-video", videoData);
+      console.log("✅ Video toggle status sent to server");
+    } else {
+      console.error("❌ Cannot emit video toggle - socket not connected:", {
+        socket: MeetingSocket?.socket,
+        connected: MeetingSocket?.socket?.connected
+      });
     }
   };
 
@@ -1559,51 +1682,50 @@ const MeetingRoom = ({ user }) => {
       {/* Bottom Controls */}
       <footer className="bg-black/60 backdrop-blur-lg p-3 flex items-center justify-center border-t border-white/10">
         <div className="flex items-center space-x-4">
-          {/* Media Controls - Show different UI based on media availability */}
-          {localStream ? (
-            <>
-              {/* Audio Control */}
-              <div className="flex flex-col items-center">
-                <button
-                  onClick={toggleMute}
-                  className={`p-2 rounded-lg transition-all duration-200 transform hover:scale-110 ${
-                    isMuted
-                      ? "bg-gradient-to-r from-red-500 to-red-600 shadow-lg shadow-red-500/25"
-                      : "bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-500 hover:to-gray-600 shadow-lg"
-                  }`}
-                >
-                  {isMuted ? (
-                    <MicOff className="w-4 h-4 text-white" />
-                  ) : (
-                    <Mic className="w-4 h-4 text-white" />
-                  )}
-                </button>
-                <span className="text-xs text-gray-300 mt-1 font-medium">
-                  {isMuted ? "Unmute" : "Mute"}
-                </span>
-              </div>
+          {/* Media Controls - Audio always available, Video conditional */}
+          
+          {/* Audio Control - Always Available */}
+          <div className="flex flex-col items-center">
+            <button
+              onClick={toggleMute}
+              className={`p-2 rounded-lg transition-all duration-200 transform hover:scale-110 ${
+                isMuted
+                  ? "bg-gradient-to-r from-red-500 to-red-600 shadow-lg shadow-red-500/25"
+                  : "bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-500 hover:to-gray-600 shadow-lg"
+              }`}
+            >
+              {isMuted ? (
+                <MicOff className="w-4 h-4 text-white" />
+              ) : (
+                <Mic className="w-4 h-4 text-white" />
+              )}
+            </button>
+            <span className="text-xs text-gray-300 mt-1 font-medium">
+              {isMuted ? "Unmute" : "Mute"}
+            </span>
+          </div>
 
-              {/* Video Control */}
-              <div className="flex flex-col items-center">
-                <button
-                  onClick={toggleVideo}
-                  className={`p-2 rounded-lg transition-all duration-200 transform hover:scale-110 ${
-                    isVideoOff
-                      ? "bg-gradient-to-r from-red-500 to-red-600 shadow-lg shadow-red-500/25"
-                      : "bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-500 hover:to-gray-600 shadow-lg"
-                  }`}
-                >
-                  {isVideoOff ? (
-                    <VideoOff className="w-4 h-4 text-white" />
-                  ) : (
-                    <VideoIcon className="w-4 h-4 text-white" />
-                  )}
-                </button>
-                <span className="text-xs text-gray-300 mt-1 font-medium">
-                  {isVideoOff ? "Start Video" : "Stop Video"}
-                </span>
-              </div>
-            </>
+          {/* Video Control - Conditional on Stream */}
+          {localStream ? (
+            <div className="flex flex-col items-center">
+              <button
+                onClick={toggleVideo}
+                className={`p-2 rounded-lg transition-all duration-200 transform hover:scale-110 ${
+                  isVideoOff
+                    ? "bg-gradient-to-r from-red-500 to-red-600 shadow-lg shadow-red-500/25"
+                    : "bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-500 hover:to-gray-600 shadow-lg"
+                }`}
+              >
+                {isVideoOff ? (
+                  <VideoOff className="w-4 h-4 text-white" />
+                ) : (
+                  <VideoIcon className="w-4 h-4 text-white" />
+                )}
+              </button>
+              <span className="text-xs text-gray-300 mt-1 font-medium">
+                {isVideoOff ? "Start Video" : "Stop Video"}
+              </span>
+            </div>
           ) : (
             /* Enable Media Button when no stream available */
             <div className="flex flex-col items-center">
@@ -1618,6 +1740,19 @@ const MeetingRoom = ({ user }) => {
               </span>
             </div>
           )}
+
+          {/* Test Button - Remove after testing */}
+          <div className="flex flex-col items-center">
+            <button
+              onClick={testAudioToggle}
+              className="p-2 rounded-lg bg-yellow-500 hover:bg-yellow-600 shadow-lg"
+            >
+              🧪
+            </button>
+            <span className="text-xs text-gray-300 mt-1 font-medium">
+              Test
+            </span>
+          </div>
 
           {/* Participants */}
           <div className="flex flex-col items-center">
@@ -1686,6 +1821,19 @@ const MeetingRoom = ({ user }) => {
               </span>
             </div>
           )}
+
+          {/* Debug Test Button */}
+          <div className="flex flex-col items-center ml-4 pl-4 border-l border-white/20">
+            <button
+              onClick={testAudioToggle}
+              className="px-3 py-2 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-500 hover:to-purple-600 rounded-lg text-white text-xs font-semibold shadow-lg shadow-purple-500/25 transition-all duration-200 transform hover:scale-105"
+            >
+              🧪 Test
+            </button>
+            <span className="text-xs text-gray-300 mt-1 font-medium">
+              Debug
+            </span>
+          </div>
 
           {/* Settings */}
           <div className="flex flex-col items-center ml-4 pl-4 border-l border-white/20">
