@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import MeetingService from '../services/meetingService';
 import MeetingSocket from '../services/meetingSocket';
@@ -317,6 +317,71 @@ const useMeetingRoomLogic = (meetingId, displayUser, user) => {
       }
     });
 
+    // Host action success feedback
+    MeetingSocket.on('host-action-success', (data) => {
+      console.log('✅ Host action successful:', data);
+      
+      // Show success feedback to host
+      if (data.action === 'mute-participant') {
+        console.log(`✅ Successfully ${data.isForceMuted ? 'muted' : 'unmuted'} participant ${data.targetUserId}`);
+      } else if (data.action === 'disable-video') {
+        console.log(`✅ Successfully ${data.isVideoDisabled ? 'disabled' : 'enabled'} video for participant ${data.targetUserId}`);
+      }
+    });
+
+    // Participant receives host control commands
+    MeetingSocket.on('host-control-audio', (data) => {
+      console.log('🔇 PARTICIPANT: Received host audio control command:', data);
+      console.log('🔇 PARTICIPANT: My user ID is:', displayUser.id);
+      console.log('🔇 PARTICIPANT: Current audio state - muted:', isMuted);
+      
+      if (data.isForceMuted) {
+        console.log('🔇 PARTICIPANT: Host is force-muting me - triggering mute');
+        // Force mute by calling the toggleMute function
+        if (!isMuted) {
+          toggleMute(); // This will mute the participant
+        }
+        console.log('🔇 PARTICIPANT: Force mute applied');
+      } else {
+        console.log('🔊 PARTICIPANT: Host has allowed me to unmute');
+      }
+    });
+
+    // Other participants see host control updates
+    MeetingSocket.on('participant-audio-controlled', (data) => {
+      console.log('👥 Participant audio controlled by host:', data);
+      
+      // Update participant state to show mute status
+      setParticipants(prev => 
+        prev.map(p => 
+          p.userId === data.userId 
+            ? { ...p, isMuted: data.isForceMuted, isHostMuted: data.isForceMuted }
+            : p
+        )
+      );
+      console.log(`👥 Updated participant ${data.userId} mute state to:`, data.isForceMuted);
+    });
+
+    // Handle video control notifications for other participants
+    MeetingSocket.on('participant-video-controlled', (data) => {
+      console.log('👥 Participant video controlled by host:', data);
+      
+      // Update participant state to show video status
+      setParticipants(prev => 
+        prev.map(p => 
+          p.userId === data.userId 
+            ? { ...p, isVideoOff: data.isVideoDisabled, isHostVideoDisabled: data.isVideoDisabled }
+            : p
+        )
+      );
+      console.log(`👥 Updated participant ${data.userId} video state to:`, data.isVideoDisabled);
+    });
+
+    // Debug response handler
+    MeetingSocket.on('test-host-control-response', (data) => {
+      console.log('🔍 DEBUG RESPONSE: Backend host control state:', data);
+    });
+
     console.log('✅ MeetingRoom: All socket listeners set up');
     setListenersSetup(true);
   };
@@ -398,6 +463,17 @@ const useMeetingRoomLogic = (meetingId, displayUser, user) => {
     toggleMute();
   };
 
+  // Host control callback functions
+  const handleHostControlVideo = (isDisabled) => {
+    console.log('🎯 Host controlled video - setting isVideoOff to:', isDisabled);
+    setIsVideoOff(isDisabled);
+  };
+
+  const handleHostControlAudio = (isForceMuted) => {
+    console.log('🎯 Host controlled audio - setting isMuted to:', isForceMuted);
+    setIsMuted(isForceMuted);
+  };
+
   // Chat functions
   const sendMessage = () => {
     if (!newMessage.trim()) return;
@@ -449,19 +525,53 @@ const useMeetingRoomLogic = (meetingId, displayUser, user) => {
   // Host control functions
   const hostMuteParticipant = (participantId) => {
     console.log('Host muting participant:', participantId);
-    MeetingSocket.emit('host-mute-participant', {
-      meetingId,
-      participantId
-    });
+    try {
+      MeetingSocket.muteParticipant(participantId, true);
+    } catch (error) {
+      console.error('Error muting participant:', error);
+    }
   };
 
   const hostDisableVideo = (participantId) => {
     console.log('Host disabling video for participant:', participantId);
-    MeetingSocket.emit('host-disable-video', {
-      meetingId,
-      participantId
-    });
+    try {
+      MeetingSocket.disableParticipantVideo(participantId, true);
+    } catch (error) {
+      console.error('Error disabling participant video:', error);
+    }
   };
+
+  // Debug function to check user/socket IDs
+  const debugParticipantInfo = () => {
+    console.log('=== PARTICIPANT DEBUG INFO ===');
+    console.log('My displayUser:', displayUser);
+    console.log('My user object:', user);
+    console.log('My socket ID:', MeetingSocket?.socket?.id);
+    console.log('Meeting ID:', meetingId);
+    console.log('Current participants:', participants);
+    console.log('Is host:', isHost);
+    console.log('===============================');
+    
+    // Make this available globally for console access
+    window.debugParticipantInfo = debugParticipantInfo;
+    
+    // Also add a function to test backend communication
+    window.testHostControl = (targetUserId) => {
+      console.log('Testing host control for user:', targetUserId);
+      console.log('Sending test-host-control event to backend...');
+      MeetingSocket.emit('test-host-control', {
+        meetingId,
+        targetUserId,
+        fromSocketId: MeetingSocket?.socket?.id,
+        fromUserId: displayUser?.id
+      });
+    };
+  };
+
+  // Call debug on mount
+  React.useEffect(() => {
+    debugParticipantInfo();
+  }, [displayUser, user, participants, isHost]);
 
   // Meeting control functions
   const handleLeaveMeeting = () => {
@@ -558,7 +668,9 @@ const useMeetingRoomLogic = (meetingId, displayUser, user) => {
     hostDisableVideo,
     handleLeaveMeeting,
     handleEndMeeting,
-    handleVideoParticipantsChange
+    handleVideoParticipantsChange,
+    handleHostControlVideo,
+    handleHostControlAudio
   };
 };
 

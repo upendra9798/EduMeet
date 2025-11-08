@@ -77,7 +77,9 @@ const MeetingRoom = ({ user }) => {
     hostDisableVideo,
     handleLeaveMeeting,
     handleEndMeeting,
-    handleVideoParticipantsChange
+    handleVideoParticipantsChange,
+    handleHostControlVideo,
+    handleHostControlAudio
   } = useMeetingRoomLogic(meetingId, displayUser, user);
 
   // Show loading state
@@ -189,6 +191,8 @@ const MeetingRoom = ({ user }) => {
           isMuted={isMuted}
           isVideoOff={isVideoOff}
           onParticipantsChange={handleVideoParticipantsChange}
+          handleHostControlVideo={handleHostControlVideo}
+          handleHostControlAudio={handleHostControlAudio}
         />
 
         {/* Sidebars */}

@@ -180,7 +180,7 @@ const VideoTile = ({ participant, isLocal = false, isVideoOff = false, isMuted =
  * Handles video streaming for existing meeting rooms.
  * Uses Socket.IO for signaling (offer/answer/ICE exchange).
  */
-export default function VideoChat({ meetingId, userId, localStream, isMuted, isVideoOff, onParticipantsChange }) {
+export default function VideoChat({ meetingId, userId, localStream, isMuted, isVideoOff, onParticipantsChange, onHostControlVideo, onHostControlAudio }) {
   const [joined, setJoined] = useState(false);
   const [remoteParticipants, setRemoteParticipants] = useState({}); // Track remote participants and their streams
   const localVideoRef = useRef(null);
@@ -197,6 +197,46 @@ export default function VideoChat({ meetingId, userId, localStream, isMuted, isV
       meetingId,
       userId
     });
+
+    // Add global test functions
+    window.testForceVideoOff = () => {
+      console.log('🧪 Testing force video off...');
+      if (localStream) {
+        localStream.getVideoTracks().forEach(track => {
+          track.enabled = false;
+        });
+        console.log('🧪 Video tracks disabled manually');
+      }
+    };
+
+    window.testForceAudioOff = () => {
+      console.log('🧪 Testing force audio off...');
+      if (localStream) {
+        localStream.getAudioTracks().forEach(track => {
+          track.enabled = false;
+        });
+        console.log('🧪 Audio tracks disabled manually');
+      }
+    };
+
+    window.testSocketEventReceiving = () => {
+      console.log('🧪 Testing if socket can receive events...');
+      console.log('🧪 Socket ID:', MeetingSocket?.socket?.id);
+      console.log('🧪 Socket connected:', MeetingSocket?.isConnected);
+      
+      // Add a temporary test listener
+      MeetingSocket.on('test-event', (data) => {
+        console.log('🧪 RECEIVED TEST EVENT:', data);
+      });
+      
+      // Emit a test event to ourselves (echo test)
+      MeetingSocket.emit('test-frontend-event', { 
+        message: 'Test from VideoChat',
+        userId: userId,
+        socketId: MeetingSocket?.socket?.id
+      });
+    };
+
   }, [joined, remoteParticipants, localStream, meetingId, userId]);
 
   // Notify parent when remote participants change
@@ -309,6 +349,12 @@ export default function VideoChat({ meetingId, userId, localStream, isMuted, isV
 
   /** 🔗 WebRTC signaling logic via MeetingSocket */
   useEffect(() => {
+    console.log('📡 VideoChat: Setting up MeetingSocket event listeners...');
+    console.log('📡 VideoChat: MeetingSocket available:', !!MeetingSocket);
+    console.log('📡 VideoChat: Socket ID:', MeetingSocket?.socket?.id);
+    console.log('📡 VideoChat: Socket connected:', MeetingSocket?.isConnected);
+    console.log('📡 VideoChat: My userId:', userId);
+    
     // Listen for existing participants when we join
     MeetingSocket.on("meeting-joined", async (data) => {
       console.log('VideoChat: Meeting joined event received:', data);
@@ -328,6 +374,7 @@ export default function VideoChat({ meetingId, userId, localStream, isMuted, isV
               ...prev,
               [participant.socketId]: {
                 socketId: participant.socketId,
+                userId: participant.userId,
                 displayName: participant.displayName || `Participant ${participant.socketId.slice(-4)}`,
                 stream: null // Will be set when ontrack fires
               }
@@ -353,6 +400,7 @@ export default function VideoChat({ meetingId, userId, localStream, isMuted, isV
           ...prev,
           [participant.socketId]: {
             socketId: participant.socketId,
+            userId: participant.userId,
             displayName: participant.displayName || `Participant ${participant.socketId.slice(-4)}`,
             stream: null // Will be set when ontrack fires
           }
@@ -465,6 +513,116 @@ export default function VideoChat({ meetingId, userId, localStream, isMuted, isV
       }));
     });
 
+    // Handle host control audio command
+    console.log('📡 VideoChat: Registering host-control-audio listener...');
+    MeetingSocket.on("host-control-audio", (data) => {
+      console.log('🔇 VideoChat: RECEIVED HOST AUDIO CONTROL:', data);
+      console.log('🔇 VideoChat: My userId is:', userId);
+      console.log('🔇 VideoChat: Local stream available:', !!localStream);
+      console.log('🔇 VideoChat: Current mute state:', isMuted);
+      
+      if (data.isForceMuted) {
+        console.log('🔇 VideoChat: FORCE MUTING AUDIO');
+        
+        // Mute the audio tracks if stream is available
+        if (localStream) {
+          localStream.getAudioTracks().forEach((track, index) => {
+            console.log(`🔇 VideoChat: Muting audio track ${index}:`, track);
+            track.enabled = false;
+          });
+        }
+        
+        // Notify the parent component about the mute state change
+        if (onHostControlAudio) {
+          onHostControlAudio(true); // true = muted
+          console.log('🔇 VideoChat: Notified parent that audio is muted by host');
+        }
+      } else {
+        console.log('🔇 VideoChat: Host allowing audio to be unmuted');
+        
+        // Unmute audio tracks if stream is available
+        if (localStream) {
+          localStream.getAudioTracks().forEach((track, index) => {
+            console.log(`🔇 VideoChat: Unmuting audio track ${index}:`, track);
+            track.enabled = true;
+          });
+        }
+        
+        // Notify the parent component
+        if (onHostControlAudio) {
+          onHostControlAudio(false); // false = unmuted
+          console.log('🔇 VideoChat: Notified parent that audio is unmuted by host');
+        }
+      }
+    });
+
+    // Handle host control video command  
+    MeetingSocket.on("host-control-video", (data) => {
+      console.log('📹 VideoChat: RECEIVED HOST VIDEO CONTROL:', data);
+      console.log('📹 VideoChat: My userId is:', userId);
+      console.log('📹 VideoChat: Local stream available:', !!localStream);
+      console.log('📹 VideoChat: Current video state - off:', isVideoOff);
+      
+      if (data.isVideoDisabled) {
+        console.log('📹 VideoChat: FORCE DISABLING VIDEO');
+        
+        // Disable the video tracks if stream is available
+        if (localStream) {
+          localStream.getVideoTracks().forEach((track, index) => {
+            console.log(`📹 VideoChat: Disabling video track ${index}:`, track);
+            track.enabled = false;
+          });
+        }
+        
+        // Notify the parent component about the state change
+        if (onHostControlVideo) {
+          onHostControlVideo(true); // true = video is off
+          console.log('📹 VideoChat: Notified parent that video is disabled by host');
+        }
+      } else {
+        console.log('📹 VideoChat: Host allowing video to be enabled');
+        
+        // Enable video tracks if stream is available
+        if (localStream) {
+          localStream.getVideoTracks().forEach((track, index) => {
+            console.log(`📹 VideoChat: Enabling video track ${index}:`, track);
+            track.enabled = true;
+          });
+        }
+        
+        // Notify the parent component about the state change
+        if (onHostControlVideo) {
+          onHostControlVideo(false); // false = video is on
+          console.log('📹 VideoChat: Notified parent that video is enabled by host');
+        }
+      }
+    });
+
+    // Handle backup host control events (direct socket emission)
+    MeetingSocket.on("host-control-audio-direct", (data) => {
+      console.log('🔇 VideoChat: RECEIVED DIRECT HOST AUDIO CONTROL:', data);
+      // Same logic as above
+      if (data.isForceMuted && localStream) {
+        console.log('🔇 VideoChat: DIRECT - FORCE MUTING AUDIO TRACKS');
+        localStream.getAudioTracks().forEach(track => {
+          track.enabled = false;
+        });
+        setIsMuted(true);
+        console.log('🔇 VideoChat: DIRECT - Audio muted by host');
+      }
+    });
+
+    MeetingSocket.on("host-control-video-direct", (data) => {
+      console.log('📹 VideoChat: RECEIVED DIRECT HOST VIDEO CONTROL:', data);
+      if (data.isVideoDisabled && localStream) {
+        localStream.getVideoTracks().forEach(track => {
+          track.enabled = false;
+        });
+        setIsVideoOff(true);
+        console.log('📹 VideoChat: DIRECT - Video disabled by host');
+      }
+    });
+
     return () => {
       MeetingSocket.off("meeting-joined");
       MeetingSocket.off("user-joined");
@@ -474,6 +632,10 @@ export default function VideoChat({ meetingId, userId, localStream, isMuted, isV
       MeetingSocket.off("user-left");
       MeetingSocket.off("participant-audio-toggled");
       MeetingSocket.off("participant-video-toggled");
+      MeetingSocket.off("host-control-audio");
+      MeetingSocket.off("host-control-video");
+      MeetingSocket.off("host-control-audio-direct");
+      MeetingSocket.off("host-control-video-direct");
     };
   }, []);
 

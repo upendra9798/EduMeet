@@ -23,7 +23,9 @@ const MeetingRoomContent = ({
   isVideoOff,
   
   // Callbacks
-  onParticipantsChange
+  onParticipantsChange,
+  handleHostControlVideo,
+  handleHostControlAudio
 }) => {
   
   return (
@@ -37,6 +39,8 @@ const MeetingRoomContent = ({
             isMuted={isMuted}
             isVideoOff={isVideoOff}
             onParticipantsChange={onParticipantsChange}
+            onHostControlVideo={handleHostControlVideo}
+            onHostControlAudio={handleHostControlAudio}
           />
         </div>
       )}
@@ -63,6 +67,8 @@ const MeetingRoomContent = ({
               isMuted={isMuted}
               isVideoOff={isVideoOff}
               onParticipantsChange={onParticipantsChange}
+              onHostControlVideo={handleHostControlVideo}
+              onHostControlAudio={handleHostControlAudio}
             />
           </div>
           <div className="bg-white rounded-lg overflow-hidden">

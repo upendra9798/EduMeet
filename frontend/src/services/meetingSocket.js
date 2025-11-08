@@ -214,6 +214,66 @@ class MeetingSocket {
         this.emit('host-action-success', data); // Forward to UI components
       });
 
+      // HOST AUDIO/VIDEO CONTROL EVENT HANDLERS
+      this.socket.on('host-control-audio', (data) => {
+        console.log('🔇 MeetingSocket: RECEIVED HOST AUDIO CONTROL:', data);
+        console.log('🔇 MeetingSocket: My userId is:', this.userId);
+        
+        // Forward to components
+        this.emit('host-control-audio', data);
+        
+        // Also handle directly to ensure it works
+        if (data.isForceMuted) {
+          console.log('🔇 MeetingSocket: FORCE MUTING - Looking for media streams...');
+          // Try to find and mute all audio tracks
+          const videoElements = document.querySelectorAll('video');
+          videoElements.forEach((video, index) => {
+            if (video.srcObject && video.srcObject.getAudioTracks) {
+              console.log(`🔇 MeetingSocket: Found video element ${index} with stream`);
+              video.srcObject.getAudioTracks().forEach(track => {
+                console.log('🔇 MeetingSocket: Force muting audio track:', track);
+                track.enabled = false;
+              });
+            }
+          });
+        }
+      });
+
+      this.socket.on('host-control-video', (data) => {
+        console.log('📹 MeetingSocket: RECEIVED HOST VIDEO CONTROL:', data);
+        console.log('📹 MeetingSocket: My userId is:', this.userId);
+        
+        // Forward to components
+        this.emit('host-control-video', data);
+        
+        // Also handle directly to ensure it works
+        if (data.isVideoDisabled) {
+          console.log('📹 MeetingSocket: FORCE DISABLING VIDEO - Looking for media streams...');
+          // Try to find and disable all video tracks
+          const videoElements = document.querySelectorAll('video');
+          videoElements.forEach((video, index) => {
+            if (video.srcObject && video.srcObject.getVideoTracks) {
+              console.log(`📹 MeetingSocket: Found video element ${index} with stream`);
+              video.srcObject.getVideoTracks().forEach(track => {
+                console.log('📹 MeetingSocket: Force disabling video track:', track);
+                track.enabled = false;
+              });
+            }
+          });
+        }
+      });
+
+      // Handle backup direct events
+      this.socket.on('host-control-audio-direct', (data) => {
+        console.log('🔇 MeetingSocket: RECEIVED DIRECT HOST AUDIO CONTROL:', data);
+        this.emit('host-control-audio', data);
+      });
+
+      this.socket.on('host-control-video-direct', (data) => {
+        console.log('📹 MeetingSocket: RECEIVED DIRECT HOST VIDEO CONTROL:', data);
+        this.emit('host-control-video', data);
+      });
+
       // TEST EVENT HANDLERS: For debugging communication
       this.socket.on('test-event', (data) => {
         console.log('MeetingSocket: Test event received:', data);
