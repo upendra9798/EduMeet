@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { useParams, useSearchParams, useNavigate } from "react-router-dom";
 
 // Import the new components
@@ -15,14 +15,18 @@ import useMeetingRoomLogic from "../hooks/useMeetingRoomLogic";
  * Main meeting interface - now much cleaner and smaller!
  */
 const MeetingRoom = ({ user }) => {
-  console.log('MeetingRoom: Component rendered with user:', user);
-  
   const { meetingId } = useParams();
   const [searchParams] = useSearchParams();
   
-  console.log('MeetingRoom: meetingId from params:', meetingId);
-  console.log('MeetingRoom: Current URL:', window.location.href);
-  console.log('MeetingRoom: searchParams:', Object.fromEntries(searchParams.entries()));
+  // Only log on initial mount or when meetingId changes
+  useEffect(() => {
+    console.log('MeetingRoom: Component initialized with:', {
+      user: user?.username,
+      meetingId,
+      url: window.location.href,
+      searchParams: Object.fromEntries(searchParams.entries())
+    });
+  }, [meetingId, user?.id]);
 
   // Get display name from URL params or use default user name
   const displayName = searchParams.get("displayName") || user.username;
@@ -33,8 +37,6 @@ const MeetingRoom = ({ user }) => {
     id: testUserId,
     username: displayName,
   };
-  
-  console.log('MeetingRoom: Display user:', displayUser);
 
   // Use the extracted logic hook
   const {
@@ -74,7 +76,8 @@ const MeetingRoom = ({ user }) => {
     hostMuteParticipant,
     hostDisableVideo,
     handleLeaveMeeting,
-    handleEndMeeting
+    handleEndMeeting,
+    handleVideoParticipantsChange
   } = useMeetingRoomLogic(meetingId, displayUser, user);
 
   // Show loading state
@@ -151,8 +154,6 @@ const MeetingRoom = ({ user }) => {
       </div>
     );
   }
-
-  console.log('MeetingRoom: Rendering main meeting room interface');
   
   return (
     <div className="h-screen bg-gradient-to-br from-gray-900 via-slate-800 to-gray-900 flex flex-col">
@@ -187,6 +188,7 @@ const MeetingRoom = ({ user }) => {
           localStream={localStream}
           isMuted={isMuted}
           isVideoOff={isVideoOff}
+          onParticipantsChange={handleVideoParticipantsChange}
         />
 
         {/* Sidebars */}

@@ -46,10 +46,12 @@ const useMeetingRoomLogic = (meetingId, displayUser, user) => {
     setParticipants([]);
   }, []);
 
-  // Monitor participants state changes
+  // Monitor participants state changes (reduced logging)
   useEffect(() => {
-    console.log("PARTICIPANTS STATE CHANGED:", participants.length, participants);
-  }, [participants]);
+    if (participants.length > 0) {
+      console.log(`👥 Participants updated: ${participants.length} total`);
+    }
+  }, [participants.length]);
 
   // Alternative approach: Use VideoChat's remote participants data
   useEffect(() => {
@@ -496,6 +498,24 @@ const useMeetingRoomLogic = (meetingId, displayUser, user) => {
     }
   };
 
+  // VideoChat participants synchronization
+  const handleVideoParticipantsChange = useCallback((videoParticipants) => {
+    console.log('📹 VideoChat participants changed:', videoParticipants);
+    
+    if (videoParticipants && videoParticipants.length > 0) {
+      setParticipants(prev => {
+        // Merge existing participants with video participants
+        // Remove duplicates and prefer video participant data
+        const existingIds = new Set(prev.map(p => p.socketId));
+        const newParticipants = videoParticipants.filter(vp => !existingIds.has(vp.socketId));
+        
+        const merged = [...prev, ...newParticipants];
+        console.log('📹 Merged participants:', merged);
+        return merged;
+      });
+    }
+  }, []);
+
   return {
     // State
     meeting,
@@ -537,7 +557,8 @@ const useMeetingRoomLogic = (meetingId, displayUser, user) => {
     hostMuteParticipant,
     hostDisableVideo,
     handleLeaveMeeting,
-    handleEndMeeting
+    handleEndMeeting,
+    handleVideoParticipantsChange
   };
 };
 

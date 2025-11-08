@@ -180,7 +180,7 @@ const VideoTile = ({ participant, isLocal = false, isVideoOff = false, isMuted =
  * Handles video streaming for existing meeting rooms.
  * Uses Socket.IO for signaling (offer/answer/ICE exchange).
  */
-export default function VideoChat({ meetingId, userId, localStream, isMuted, isVideoOff }) {
+export default function VideoChat({ meetingId, userId, localStream, isMuted, isVideoOff, onParticipantsChange }) {
   const [joined, setJoined] = useState(false);
   const [remoteParticipants, setRemoteParticipants] = useState({}); // Track remote participants and their streams
   const localVideoRef = useRef(null);
@@ -198,6 +198,20 @@ export default function VideoChat({ meetingId, userId, localStream, isMuted, isV
       userId
     });
   }, [joined, remoteParticipants, localStream, meetingId, userId]);
+
+  // Notify parent when remote participants change
+  useEffect(() => {
+    if (onParticipantsChange) {
+      const participantsArray = Object.values(remoteParticipants).map(p => ({
+        socketId: p.socketId,
+        userId: p.userId || 'unknown',
+        displayName: p.displayName || 'Remote User',
+        isMuted: p.isMuted || false,
+        isVideoOff: p.isVideoOff || false
+      }));
+      onParticipantsChange(participantsArray);
+    }
+  }, [remoteParticipants, onParticipantsChange]);
 
   /** 🚪 Auto-join the meeting room */
   useEffect(() => {
