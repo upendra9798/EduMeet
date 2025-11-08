@@ -294,6 +294,8 @@ const MeetingRoomSidebars = ({
               <div className="bg-white/5 rounded-xl p-3 border border-white/10">
                 <div className="flex space-x-2">
                   <input
+                    id="chat-message-input"
+                    name="chatMessage"
                     type="text"
                     value={newMessage}
                     onChange={(e) => setNewMessage(e.target.value)}

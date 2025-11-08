@@ -342,19 +342,37 @@ const meetingSocket = (io) => {
           return;
         }
 
-        // Create a safe message object for broadcasting
-        const safeMessage = {
-          id: message.id,
-          text: message.text,
-          sender: message.sender,
-          senderId: message.senderId,
-          timestamp: message.timestamp
-        };
+        // Handle both string and object message formats
+        let safeMessage;
+        if (typeof message === 'string') {
+          // If message is a string, create message object
+          safeMessage = {
+            text: message,
+            sender: userSession.displayName || 'Anonymous',
+            senderId: userSession.userId,
+            timestamp: new Date().toISOString(),
+            messageId: Date.now() + Math.random()
+          };
+        } else {
+          // Create a safe message object for broadcasting
+          safeMessage = {
+            id: message.id,
+            text: message.text,
+            sender: message.sender || userSession.displayName || 'Anonymous',
+            senderId: message.senderId || userSession.userId,
+            timestamp: message.timestamp || new Date().toISOString(),
+            messageId: message.id || Date.now() + Math.random()
+          };
+        }
 
         // Broadcast message to all other participants in the room
-        console.log(`💬 Broadcasting message in meeting ${meetingId} by ${message.sender}`);
+        console.log(`💬 Broadcasting message in meeting ${meetingId} by ${safeMessage.sender}`);
+        console.log(`💬 Room ${roomId} has users:`, users[roomId]);
+        console.log(`💬 Broadcasting to ${users[roomId]?.length - 1} other participants (excluding sender)`);
+        console.log(`💬 Message content:`, safeMessage);
+        
         socket.to(roomId).emit("message-received", safeMessage);
-        console.log(`💬 Message broadcast complete`);
+        console.log(`💬 Message broadcast complete to room: ${roomId}`);
         
       } catch (error) {
         console.error('Error sending message:', error);

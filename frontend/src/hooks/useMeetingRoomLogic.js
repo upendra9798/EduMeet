@@ -290,15 +290,28 @@ const useMeetingRoomLogic = (meetingId, displayUser, user) => {
       console.log('💬 Message received:', messageData);
       
       if (messageData && messageData.text) {
+        const isOwnMessage = messageData.senderId === displayUser.id;
+        
+        // Skip adding our own messages since we already added them locally when sending
+        if (isOwnMessage) {
+          console.log('💬 Skipping own message to avoid duplicate');
+          return;
+        }
+        
         const receivedMessage = {
           id: messageData.messageId || Date.now() + Math.random(),
           text: messageData.text,
           sender: messageData.senderDisplayName || messageData.sender || 'Anonymous',
           timestamp: messageData.timestamp || new Date().toISOString(),
-          isOwn: messageData.senderId === displayUser.id
+          isOwn: false
         };
         
-        setMessages(prev => [...prev, receivedMessage]);
+        setMessages(prev => {
+          const newMessages = [...prev, receivedMessage];
+          console.log('💬 Added remote message to chat. Total messages:', newMessages.length);
+          console.log('💬 Remote message:', receivedMessage);
+          return newMessages;
+        });
       }
     });
 
@@ -394,10 +407,31 @@ const useMeetingRoomLogic = (meetingId, displayUser, user) => {
     }
 
     try {
-      MeetingSocket.sendMessage(meetingId, newMessage.trim());
+      // Create the message object for immediate display
+      const messageToSend = newMessage.trim();
+      const ownMessage = {
+        id: Date.now() + Math.random(),
+        text: messageToSend,
+        sender: displayUser.username || displayUser.displayName || 'You',
+        timestamp: new Date().toISOString(),
+        isOwn: true
+      };
+
+      // Add message to local display immediately
+      setMessages(prev => {
+        const newMessages = [...prev, ownMessage];
+        console.log('💬 Adding own message locally. Total messages:', newMessages.length);
+        console.log('💬 Own message:', ownMessage);
+        return newMessages;
+      });
+      
+      // Send message to backend
+      MeetingSocket.sendMessage(meetingId, messageToSend);
+      
+      // Clear input and update rate limiting
       setNewMessage('');
       setLastMessageTime(now);
-      console.log('Message sent successfully');
+      console.log('Message sent successfully and added to local display');
     } catch (error) {
       console.error('Error sending message:', error);
     }

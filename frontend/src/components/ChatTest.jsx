@@ -117,6 +117,8 @@ const ChatTest = () => {
           {/* Message Input */}
           <div className="flex gap-2">
             <input
+              id="chat-test-message-input"
+              name="chatTestMessage"
               type="text"
               value={newMessage}
               onChange={(e) => setNewMessage(e.target.value)}

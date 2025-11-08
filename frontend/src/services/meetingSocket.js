@@ -367,15 +367,25 @@ class MeetingSocket {
       if (this.isConnected && this.meetingId === meetingId) {
         console.log('Sending message via socket...');
         
-        // Create a clean message object to prevent serialization issues
-        const cleanMessage = {
-          id: message.id,
-          text: message.text,
-          sender: message.sender,
-          senderId: message.senderId,
-          timestamp: message.timestamp,
-          // Don't send isOwn property as it's client-specific
-        };
+        // Handle both string and object message formats
+        let cleanMessage;
+        if (typeof message === 'string') {
+          // If message is a string, create message object
+          cleanMessage = {
+            text: message,
+            timestamp: new Date().toISOString()
+          };
+        } else {
+          // If message is an object, create a clean message object to prevent serialization issues
+          cleanMessage = {
+            id: message.id,
+            text: message.text,
+            sender: message.sender,
+            senderId: message.senderId,
+            timestamp: message.timestamp,
+            // Don't send isOwn property as it's client-specific
+          };
+        }
         
         this.socket.emit('send-message', {
           meetingId,
