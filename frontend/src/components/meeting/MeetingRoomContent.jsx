@@ -97,7 +97,7 @@ const MeetingRoomContent = ({
                 className="bg-blue-500 hover:bg-blue-600 text-white p-3 rounded-full shadow-lg transition-all hover:scale-110"
                 title="Enable Camera & Microphone"
               >
-                <VideoIcon className="w-5 h-5" />
+                <Video className="w-5 h-5" />
               </button>
             </div>
           )}

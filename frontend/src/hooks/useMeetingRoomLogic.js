@@ -88,6 +88,13 @@ const useMeetingRoomLogic = (meetingId, displayUser, user) => {
 
     return () => {
       console.log('MeetingRoom: Cleanup - leaving meeting socket');
+      // Stop all media tracks to free up camera/microphone
+      if (localStream) {
+        localStream.getTracks().forEach(track => {
+          console.log('MeetingRoom: Stopping track:', track.kind);
+          track.stop();
+        });
+      }
       MeetingSocket.leaveMeeting();
     };
   }, [meetingId]);
@@ -332,23 +339,43 @@ const useMeetingRoomLogic = (meetingId, displayUser, user) => {
   };
 
   const toggleMute = () => {
+    const newMutedState = !isMuted;
+    
     if (localStream) {
       const audioTracks = localStream.getAudioTracks();
       audioTracks.forEach(track => {
-        track.enabled = isMuted;
+        track.enabled = !newMutedState; // Fix: Enable tracks when audio should be on
       });
     }
-    setIsMuted(!isMuted);
+    
+    setIsMuted(newMutedState);
+    
+    // Notify other participants via socket
+    try {
+      MeetingSocket.toggleAudio(newMutedState);
+    } catch (error) {
+      console.error('Failed to notify audio toggle:', error);
+    }
   };
 
   const toggleVideo = () => {
+    const newVideoState = !isVideoOff;
+    
     if (localStream) {
       const videoTracks = localStream.getVideoTracks();
       videoTracks.forEach(track => {
-        track.enabled = isVideoOff;
+        track.enabled = !newVideoState; // Fix: Enable tracks when video should be on
       });
     }
-    setIsVideoOff(!isVideoOff);
+    
+    setIsVideoOff(newVideoState);
+    
+    // Notify other participants via socket
+    try {
+      MeetingSocket.toggleVideo(newVideoState);
+    } catch (error) {
+      console.error('Failed to notify video toggle:', error);
+    }
   };
 
   const testAudioToggle = () => {

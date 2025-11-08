@@ -446,6 +446,36 @@ class MeetingSocket {
   }
 
   /**
+   * PARTICIPANT CONTROLS - Toggle own audio status
+   * @param {boolean} isMuted - Whether audio is muted
+   */
+  toggleAudio(isMuted) {
+    if (!this.isConnected || !this.meetingId) {
+      throw new Error('Not connected to meeting');
+    }
+    
+    this.socket.emit('toggle-audio', {
+      meetingId: this.meetingId,
+      isMuted
+    });
+  }
+
+  /**
+   * PARTICIPANT CONTROLS - Toggle own video status
+   * @param {boolean} isVideoOff - Whether video is off
+   */
+  toggleVideo(isVideoOff) {
+    if (!this.isConnected || !this.meetingId) {
+      throw new Error('Not connected to meeting');
+    }
+    
+    this.socket.emit('toggle-video', {
+      meetingId: this.meetingId,
+      isVideoOff
+    });
+  }
+
+  /**
    * HOST CONTROLS - Remove participant from meeting
    * @param {string} targetUserId - User ID to remove
    */

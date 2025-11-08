@@ -458,6 +458,8 @@ export default function VideoChat({ meetingId, userId, localStream, isMuted, isV
       MeetingSocket.off("answer");
       MeetingSocket.off("ice-candidate");
       MeetingSocket.off("user-left");
+      MeetingSocket.off("participant-audio-toggled");
+      MeetingSocket.off("participant-video-toggled");
     };
   }, []);
 
@@ -626,7 +628,7 @@ export default function VideoChat({ meetingId, userId, localStream, isMuted, isV
               }}
               isLocal={true}
               isMuted={isMuted}
-              isVideoOff={isVideoOff || !localStream}
+              isVideoOff={isVideoOff}
             />
             
             {/* Remote Participants */}
