@@ -187,12 +187,6 @@ const MeetingRoom = ({ user }) => {
           localStream={localStream}
           isMuted={isMuted}
           isVideoOff={isVideoOff}
-          showMediaPrompt={showMediaPrompt}
-          setShowMediaPrompt={setShowMediaPrompt}
-          showTroubleshoot={showTroubleshoot}
-          requestMediaAccess={requestMediaAccess}
-          handleMediaRetry={handleMediaRetry}
-          handleSkipCamera={handleSkipCamera}
         />
 
         {/* Sidebars */}
