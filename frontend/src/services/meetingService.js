@@ -16,15 +16,12 @@ class MeetingService {
       try {
         return await requestFn();
       } catch (error) {
-        console.log(`Request attempt ${attempt} failed:`, error.message);
-        
         if (attempt === maxRetries) {
           throw error;
         }
         
         // Wait before retrying (exponential backoff)
         const waitTime = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
-        console.log(`Retrying in ${waitTime}ms...`);
         await new Promise(resolve => setTimeout(resolve, waitTime));
       }
     }
@@ -36,9 +33,6 @@ class MeetingService {
    */
   async createMeeting(meetingData) {
     try {
-      console.log('MeetingService: Sending API request with data:', meetingData);
-      console.log('MeetingService: Using API base URL:', api.defaults.baseURL);
-      
       const response = await this._makeRequestWithRetry(() => 
         api.post('/meetings/create', meetingData, {
           timeout: 30000, // 30 second timeout for mobile
@@ -49,15 +43,9 @@ class MeetingService {
         })
       );
       
-      console.log('MeetingService: Received API response:', response);
-      console.log('MeetingService: Response status:', response.status);
-      console.log('MeetingService: Response data:', response.data);
       return response.data;
     } catch (error) {
       console.error('MeetingService: API error:', error);
-      console.error('MeetingService: Error response status:', error.response?.status);
-      console.error('MeetingService: Error response data:', error.response?.data);
-      console.error('MeetingService: Error message:', error.message);
       
       // More specific error handling for mobile issues
       if (error.code === 'NETWORK_ERROR' || error.code === 'ECONNABORTED') {
@@ -80,8 +68,6 @@ class MeetingService {
    */
   async joinMeeting(meetingId, userId) {
     try {
-      console.log('MeetingService: Joining meeting:', meetingId, 'with user:', userId);
-      
       const response = await this._makeRequestWithRetry(() =>
         api.post(`/meetings/join/${meetingId}`, { userId }, {
           timeout: 30000,
@@ -91,8 +77,6 @@ class MeetingService {
           }
         })
       );
-      
-      console.log('MeetingService: Join meeting response:', response.data);
       return response.data;
     } catch (error) {
       console.error('MeetingService: Join meeting error:', error);
@@ -116,8 +100,6 @@ class MeetingService {
    */
   async getMeeting(meetingId) {
     try {
-      console.log('MeetingService: getMeeting called with meetingId:', meetingId);
-      
       const response = await this._makeRequestWithRetry(() =>
         api.get(`/meetings/${meetingId}`, {
           timeout: 30000,
@@ -127,14 +109,9 @@ class MeetingService {
         })
       );
       
-      console.log('MeetingService: getMeeting response status:', response.status);
-      console.log('MeetingService: getMeeting response data:', response.data);
       return response.data;
     } catch (error) {
       console.error('MeetingService: getMeeting error:', error);
-      console.error('MeetingService: Error response status:', error.response?.status);
-      console.error('MeetingService: Error response data:', error.response?.data);
-      console.error('MeetingService: Error message:', error.message);
       
       if (error.code === 'NETWORK_ERROR' || error.code === 'ECONNABORTED') {
         throw new Error('Network connection issue. Please check your internet connection and try again.');

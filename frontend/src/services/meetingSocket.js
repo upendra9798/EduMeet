@@ -126,9 +126,6 @@ class MeetingSocket {
 
       // ERROR HANDLER: Called if socket connection fails
       this.socket.on('connect_error', (error) => {
-        console.error('❌ MeetingSocket: Connection error:', error);
-        console.error('❌ MeetingSocket: Failed URL:', `${SOCKET_URL}/meeting`);
-        
         // CRITICAL: Reject the Promise to notify calling code of connection failure
         // This will trigger error handling in MeetingRoom component
         reject(error);
@@ -136,12 +133,10 @@ class MeetingSocket {
 
       // DISCONNECT HANDLERS: Handle when socket connection is lost
       this.socket.on('disconnect', (reason) => {
-        console.log('🔌 MeetingSocket: Disconnected:', reason);
         this.isConnected = false; // Update connection status
       });
 
       this.socket.on('disconnect', () => {
-        console.log('Disconnected from meeting socket');
         this.isConnected = false;
         this.emit('disconnected'); // Notify listeners of disconnection
       });
@@ -151,22 +146,18 @@ class MeetingSocket {
       // before the connection completes
       
       this.socket.on('meeting-joined', (data) => {
-        console.log('Joined meeting:', data);
         this.emit('meeting-joined', data); // Forward to component listeners
       });
 
       this.socket.on('meeting-left', (data) => {
-        console.log('Left meeting:', data);
         this.emit('meeting-left', data);
       });
 
       this.socket.on('user-joined', (data) => {
-        console.log('User joined meeting:', data);
         this.emit('user-joined', data);
       });
 
       this.socket.on('user-left', (data) => {
-        console.log('User left meeting:', data);
         this.emit('user-left', data);
       });
 
@@ -190,44 +181,34 @@ class MeetingSocket {
 
       // CHAT EVENT HANDLERS: Handle real-time chat messages
       this.socket.on('message-received', (message) => {
-        console.log('MeetingSocket received message from server:', message);
         this.emit('message-received', message); // Forward to UI components
       });
 
       // HOST CONTROL EVENT HANDLERS: Handle host control events
       this.socket.on('participant-removed', (data) => {
-        console.log('MeetingSocket: Participant removed by host:', data);
         this.emit('participant-removed', data); // Forward to UI components
       });
 
       this.socket.on('removed-from-meeting', (data) => {
-        console.log('MeetingSocket: Removed from meeting by host:', data);
         this.emit('removed-from-meeting', data); // Forward to UI components
       });
 
       this.socket.on('host-action-success', (data) => {
-        console.log('MeetingSocket: Host action successful:', data);
         this.emit('host-action-success', data); // Forward to UI components
       });
 
       // HOST AUDIO/VIDEO CONTROL EVENT HANDLERS
       this.socket.on('host-control-audio', (data) => {
-        console.log('🔇 MeetingSocket: RECEIVED HOST AUDIO CONTROL:', data);
-        console.log('🔇 MeetingSocket: My userId is:', this.userId);
-        
         // Forward to components
         this.emit('host-control-audio', data);
         
         // Also handle directly to ensure it works
         if (data.isForceMuted) {
-          console.log('🔇 MeetingSocket: FORCE MUTING - Looking for media streams...');
           // Try to find and mute all audio tracks
           const videoElements = document.querySelectorAll('video');
-          videoElements.forEach((video, index) => {
+          videoElements.forEach((video) => {
             if (video.srcObject && video.srcObject.getAudioTracks) {
-              console.log(`🔇 MeetingSocket: Found video element ${index} with stream`);
               video.srcObject.getAudioTracks().forEach(track => {
-                console.log('🔇 MeetingSocket: Force muting audio track:', track);
                 track.enabled = false;
               });
             }
@@ -236,22 +217,16 @@ class MeetingSocket {
       });
 
       this.socket.on('host-control-video', (data) => {
-        console.log('📹 MeetingSocket: RECEIVED HOST VIDEO CONTROL:', data);
-        console.log('📹 MeetingSocket: My userId is:', this.userId);
-        
         // Forward to components
         this.emit('host-control-video', data);
         
         // Also handle directly to ensure it works
         if (data.isVideoDisabled) {
-          console.log('📹 MeetingSocket: FORCE DISABLING VIDEO - Looking for media streams...');
           // Try to find and disable all video tracks
           const videoElements = document.querySelectorAll('video');
-          videoElements.forEach((video, index) => {
+          videoElements.forEach((video) => {
             if (video.srcObject && video.srcObject.getVideoTracks) {
-              console.log(`📹 MeetingSocket: Found video element ${index} with stream`);
               video.srcObject.getVideoTracks().forEach(track => {
-                console.log('📹 MeetingSocket: Force disabling video track:', track);
                 track.enabled = false;
               });
             }
@@ -261,64 +236,30 @@ class MeetingSocket {
 
       // Handle backup direct events
       this.socket.on('host-control-audio-direct', (data) => {
-        console.log('🔇 MeetingSocket: RECEIVED DIRECT HOST AUDIO CONTROL:', data);
         this.emit('host-control-audio', data);
       });
 
       this.socket.on('host-control-video-direct', (data) => {
-        console.log('📹 MeetingSocket: RECEIVED DIRECT HOST VIDEO CONTROL:', data);
         this.emit('host-control-video', data);
       });
 
       // TEST EVENT HANDLERS: For debugging communication
-      this.socket.on('test-event', (data) => {
-        console.log('MeetingSocket: Test event received:', data);
-        this.emit('test-event', data); // Forward to UI components
-      });
-
-      this.socket.on('test-backend-response', (data) => {
-        console.log('MeetingSocket: Backend test response received:', data);
-        this.emit('test-backend-response', data); // Forward to UI components
-      });
-
-      this.socket.on('debug-room-response', (data) => {
-        console.log('MeetingSocket: Debug room response received:', data);
-        this.emit('debug-room-response', data); // Forward to UI components
-      });
-
       this.socket.on('participant-audio-toggled', (data) => {
-        console.log('MeetingSocket: Audio toggled event received:', data);
+        console.log('🔊 Received participant-audio-toggled:', data);
         this.emit('participant-audio-toggled', data); // Forward to UI components
       });
 
       this.socket.on('participant-video-toggled', (data) => {
-        console.log('MeetingSocket: Video toggled event received:', data);
+        console.log('📹 Received participant-video-toggled:', data);
         this.emit('participant-video-toggled', data); // Forward to UI components
       });
 
-      this.socket.on('participant-audio-toggled-direct', (data) => {
-        console.log('MeetingSocket: Direct audio toggled event received:', data);
-        this.emit('participant-audio-toggled-direct', data); // Forward to UI components
-      });
-
       // HOST CONTROL EVENT HANDLERS
-      this.socket.on('host-control-audio', (data) => {
-        console.log('MeetingSocket: Host control audio received:', data);
-        this.emit('host-control-audio', data); // Forward to UI components
-      });
-
-      this.socket.on('host-control-video', (data) => {
-        console.log('MeetingSocket: Host control video received:', data);
-        this.emit('host-control-video', data); // Forward to UI components
-      });
-
       this.socket.on('participant-audio-controlled', (data) => {
-        console.log('MeetingSocket: Participant audio controlled received:', data);
         this.emit('participant-audio-controlled', data); // Forward to UI components
       });
 
       this.socket.on('participant-video-controlled', (data) => {
-        console.log('MeetingSocket: Participant video controlled received:', data);
         this.emit('participant-video-controlled', data); // Forward to UI components
       });
       
@@ -520,6 +461,12 @@ class MeetingSocket {
       throw new Error('Not connected to meeting');
     }
     
+    console.log('🔊 MeetingSocket.toggleAudio called:', { 
+      isMuted, 
+      meetingId: this.meetingId, 
+      isConnected: this.isConnected 
+    });
+    
     this.socket.emit('toggle-audio', {
       meetingId: this.meetingId,
       isMuted
@@ -534,6 +481,12 @@ class MeetingSocket {
     if (!this.isConnected || !this.meetingId) {
       throw new Error('Not connected to meeting');
     }
+    
+    console.log('📹 MeetingSocket.toggleVideo called:', { 
+      isVideoOff, 
+      meetingId: this.meetingId, 
+      isConnected: this.isConnected 
+    });
     
     this.socket.emit('toggle-video', {
       meetingId: this.meetingId,

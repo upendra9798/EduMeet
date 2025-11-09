@@ -16,16 +16,6 @@ const meetingSocket = (io) => {
 
   meetingNamespace.on("connection", (socket) => {
     console.log("Meeting client connected:", socket.id);
-    
-    // Test event listener to verify communication works both ways
-    socket.on("test-frontend-event", (data) => {
-      console.log("🧪 Backend received test event from frontend:", data);
-      console.log("🧪 Sending test-backend-response to:", socket.id);
-      socket.emit("test-backend-response", { message: "Backend received your test event!" });
-      console.log("🧪 test-backend-response sent");
-    });
-
-
 
     //🏠 4️⃣ Joining a Meeting Room
     socket.on("join-meeting", async (data) => {
@@ -94,19 +84,9 @@ const meetingSocket = (io) => {
 
         const otherUsers = users[roomId].filter((id) => id !== socket.id);
 
-        console.log(`🔧 Backend Debug for meeting ${meetingId}:`);
-        console.log(`   👥 users[roomId]:`, users[roomId]);
-        console.log(`   🆔 socket.id:`, socket.id);
-        console.log(`   👤 current userId:`, userId);
-        console.log(`   📋 meeting.currentParticipants:`, meeting.currentParticipants.map(p => ({ userId: p.userId, socketId: p.socketId, displayName: p.displayName })));
-        console.log(`   📋 meeting.participants (legacy):`, meeting.participants);
-        console.log(`   🔗 userMeetings keys:`, Object.keys(userMeetings));
-        console.log(`   ➡️ otherUsers:`, otherUsers);
-
         // Get existing participants info
         const existingParticipants = otherUsers.map(socketId => {
           const userSession = userMeetings[socketId];
-          console.log(`   🔍 Checking socketId ${socketId}:`, userSession);
           if (userSession) {
             return {
               socketId,
@@ -116,8 +96,6 @@ const meetingSocket = (io) => {
           }
           return null;
         }).filter(Boolean);
-
-        console.log(`   ✅ existingParticipants:`, existingParticipants);
 
         // Notify new user about existing peers
         socket.emit("meeting-joined", { 
@@ -382,55 +360,15 @@ const meetingSocket = (io) => {
       }
     });
 
-    // Test event handlers
-    socket.on('test-frontend-event', (data) => {
-      console.log("🧪 TEST: Received from frontend:", data);
-      socket.emit('test-backend-response', { message: "Backend received your test", received: data });
-    });
-
-    socket.on('debug-room-info', async (data) => {
-      try {
-        console.log("🧪 ROOM INFO: Request from socket:", socket.id, "for meeting:", data.meetingId);
-        
-        const rooms = Array.from(socket.rooms);
-        console.log("🧪 ROOM INFO: Socket rooms:", rooms);
-        
-        const roomId = `meeting-${data.meetingId}`;
-        const isInRoom = socket.rooms.has(roomId);
-        console.log("🧪 ROOM INFO: Is in target room?", isInRoom, "Target room:", roomId);
-        
-        // Get all sockets in the room
-        const socketsInRoom = await meetingNamespace.in(roomId).fetchSockets();
-        console.log("🧪 ROOM INFO: Sockets in room:", socketsInRoom.map(s => s.id));
-        
-        socket.emit('debug-room-response', {
-          socketId: socket.id,
-          rooms: rooms,
-          targetRoom: roomId,
-          isInTargetRoom: isInRoom,
-          socketsInTargetRoom: socketsInRoom.map(s => s.id)
-        });
-        
-      } catch (error) {
-        console.error("🧪 ROOM INFO ERROR:", error);
-        socket.emit('debug-room-response', { error: error.message });
-      }
-    });
-
     // Handle audio toggle events
     socket.on("toggle-audio", (data) => {
-      console.log('🔊🔊🔊 BACKEND: RECEIVED TOGGLE-AUDIO EVENT 🔊🔊🔊');
-      console.log('Socket ID:', socket.id);
-      console.log('Data:', data);
-      console.log('User session:', userMeetings[socket.id]);
-      
+      console.log('🔊 Backend: Received toggle-audio event:', data);
       try {
         const { meetingId, isMuted } = data;
         
         // Verify the user is in this meeting
         const userSession = userMeetings[socket.id];
         if (!userSession || userSession.meetingId !== meetingId) {
-          console.error('User not in meeting for audio toggle:', { socketId: socket.id, meetingId });
           return;
         }
 
@@ -443,28 +381,9 @@ const meetingSocket = (io) => {
           participantId: userSession.userId
         };
         
-        console.log(`📢 Broadcasting participant-audio-toggled to room ${roomId}:`, audioToggleData);
-        
-        // ENHANCED DEBUG: Check who's actually in the room before broadcasting
-        meetingNamespace.in(roomId).fetchSockets().then(sockets => {
-          console.log(`🎯 SOCKETS IN ROOM ${roomId}:`, sockets.map(s => s.id));
-          console.log(`🎯 ABOUT TO BROADCAST TO ${sockets.length} SOCKETS`);
-          
-          // Broadcast to room (all participants)
-          meetingNamespace.to(roomId).emit("participant-audio-toggled", audioToggleData);
-          console.log(`🎯 BROADCAST SENT!`);
-          
-          // Also send direct to each socket for debugging
-          sockets.forEach(targetSocket => {
-            console.log(`🎯 DIRECT EMIT to socket ${targetSocket.id}`);
-            targetSocket.emit("participant-audio-toggled-direct", audioToggleData);
-          });
-        });
-        
-        // ALSO send directly to sender to ensure they get their own update
-        socket.emit("participant-audio-toggled", audioToggleData);
-        
-        console.log(`🔊 User ${socket.id} ${isMuted ? 'muted' : 'unmuted'} audio in meeting ${meetingId}`);
+        // Broadcast to room (all participants)
+        console.log('🔊 Backend: Broadcasting participant-audio-toggled:', audioToggleData);
+        meetingNamespace.to(roomId).emit("participant-audio-toggled", audioToggleData);
         
       } catch (error) {
         console.error('Error handling audio toggle:', error);
@@ -473,19 +392,13 @@ const meetingSocket = (io) => {
 
     // Handle video toggle events
     socket.on("toggle-video", (data) => {
-      console.log('📹 Backend: Received toggle-video event:', {
-        socketId: socket.id,
-        data,
-        userSession: userMeetings[socket.id]
-      });
-      
+      console.log('📹 Backend: Received toggle-video event:', data);
       try {
         const { meetingId, isVideoOff } = data;
         
         // Verify the user is in this meeting
         const userSession = userMeetings[socket.id];
         if (!userSession || userSession.meetingId !== meetingId) {
-          console.error('User not in meeting for video toggle:', { socketId: socket.id, meetingId });
           return;
         }
 
@@ -498,15 +411,9 @@ const meetingSocket = (io) => {
           participantId: userSession.userId
         };
         
-        console.log(`📢 Broadcasting participant-video-toggled to room ${roomId}:`, videoToggleData);
-        
         // Broadcast to room (all participants) 
+        console.log('📹 Backend: Broadcasting participant-video-toggled:', videoToggleData);
         meetingNamespace.to(roomId).emit("participant-video-toggled", videoToggleData);
-        
-        // ALSO send directly to sender to ensure they get their own update
-        socket.emit("participant-video-toggled", videoToggleData);
-        
-        console.log(`📹 User ${socket.id} ${isVideoOff ? 'turned off' : 'turned on'} video in meeting ${meetingId}`);
         
       } catch (error) {
         console.error('Error handling video toggle:', error);
@@ -574,19 +481,7 @@ const meetingSocket = (io) => {
           removedBy: userSession.userId
         });
         
-        // Also send with a custom event name to test
-        socket.emit("CUSTOM-PARTICIPANT-REMOVED", {
-          userId: targetUserId,
-          removedBy: userSession.userId,
-          message: "CUSTOM EVENT TEST"
-        });
-        
-        socket.emit("test-event", { 
-          message: `DIRECT to host ${socket.id}`,
-          timestamp: new Date().toISOString()
-        });
-        
-        console.log(`📤 DIRECT: Events sent to host socket ${socket.id}`);
+
 
         // Remove from database
         await Meeting.updateOne(
