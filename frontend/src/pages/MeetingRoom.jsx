@@ -207,6 +207,8 @@ const MeetingRoom = ({ user }) => {
           user={user}
           isHost={isHost}
           meetingId={meetingId}
+          isMuted={isMuted}
+          isVideoOff={isVideoOff}
           messages={messages}
           newMessage={newMessage}
           setNewMessage={setNewMessage}

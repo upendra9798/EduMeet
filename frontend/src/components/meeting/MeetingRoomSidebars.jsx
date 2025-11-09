@@ -22,6 +22,10 @@ const MeetingRoomSidebars = ({
   isHost,
   meetingId,
   
+  // Current user media state
+  isMuted,
+  isVideoOff,
+  
   // Chat data
   messages,
   newMessage,
@@ -115,6 +119,39 @@ const MeetingRoomSidebars = ({
                         {displayUser.username}
                       </span>
                       <span className="text-xs text-blue-300">(You)</span>
+                      
+                      {/* Current User Audio/Video Status Icons */}
+                      <div className="flex items-center space-x-1">
+                        {/* Audio Status */}
+                        {isMuted ? (
+                          <div className="p-1 rounded-full bg-red-500/20" title="Muted">
+                            <svg className="w-3 h-3 text-red-400" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.617.814L4.172 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.172l4.211-3.814zm5.617-.814a1 1 0 011.414 0L18 3.848l1.586-1.586a1 1 0 111.414 1.414L19.414 5.262 21 6.848a1 1 0 11-1.414 1.414L18 6.676l-1.586 1.586a1 1 0 11-1.414-1.414L16.586 5.262 15 3.676a1 1 0 010-1.414z" clipRule="evenodd" />
+                            </svg>
+                          </div>
+                        ) : (
+                          <div className="p-1 rounded-full bg-green-500/20" title="Unmuted">
+                            <svg className="w-3 h-3 text-green-400" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z" clipRule="evenodd" />
+                            </svg>
+                          </div>
+                        )}
+                        
+                        {/* Video Status */}
+                        {isVideoOff ? (
+                          <div className="p-1 rounded-full bg-red-500/20" title="Video Off">
+                            <svg className="w-3 h-3 text-red-400" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A2 2 0 0017 14V8a2 2 0 00-2-2h-5.586l-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2h5.586L3.707 2.293zM7 11a1 1 0 112 0 1 1 0 01-2 0z" clipRule="evenodd" />
+                            </svg>
+                          </div>
+                        ) : (
+                          <div className="p-1 rounded-full bg-green-500/20" title="Video On">
+                            <svg className="w-3 h-3 text-green-400" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
+                            </svg>
+                          </div>
+                        )}
+                      </div>
                     </div>
                     {isHost && (
                       <span className="text-xs bg-gradient-to-r from-yellow-500 to-orange-500 px-2 py-1 rounded-full text-white font-medium">

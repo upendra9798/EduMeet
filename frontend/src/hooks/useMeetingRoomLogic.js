@@ -333,32 +333,66 @@ const useMeetingRoomLogic = (meetingId, displayUser, user) => {
     MeetingSocket.on('host-control-audio', (data) => {
       console.log('🔇 PARTICIPANT: Received host audio control command:', data);
       console.log('🔇 PARTICIPANT: My user ID is:', displayUser.id);
+      console.log('🔇 PARTICIPANT: My socket ID is:', MeetingSocket?.socket?.id);
       console.log('🔇 PARTICIPANT: Current audio state - muted:', isMuted);
       
       if (data.isForceMuted) {
-        console.log('🔇 PARTICIPANT: Host is force-muting me - triggering mute');
-        // Force mute by calling the toggleMute function
-        if (!isMuted) {
-          toggleMute(); // This will mute the participant
-        }
-        console.log('🔇 PARTICIPANT: Force mute applied');
+        console.log('🔇 PARTICIPANT: Host is force-muting me');
+        // Update the mute state directly
+        setIsMuted(true);
+        console.log('🔇 PARTICIPANT: Set muted state to true');
       } else {
-        console.log('🔊 PARTICIPANT: Host has allowed me to unmute');
+        console.log('🔊 PARTICIPANT: Host is allowing me to unmute');
+        // Update the mute state directly
+        setIsMuted(false);
+        console.log('🔊 PARTICIPANT: Set muted state to false');
+      }
+    });
+
+    // Participant receives host video control commands
+    MeetingSocket.on('host-control-video', (data) => {
+      console.log('📹 PARTICIPANT: Received host video control command:', data);
+      console.log('📹 PARTICIPANT: My user ID is:', displayUser.id);
+      console.log('📹 PARTICIPANT: My socket ID is:', MeetingSocket?.socket?.id);
+      console.log('📹 PARTICIPANT: Current video state - off:', isVideoOff);
+      
+      if (data.isVideoDisabled) {
+        console.log('📹 PARTICIPANT: Host is disabling my video');
+        // Update the video state directly
+        setIsVideoOff(true);
+        console.log('� PARTICIPANT: Set video off state to true');
+      } else {
+        console.log('� PARTICIPANT: Host is allowing my video');
+        // Update the video state directly
+        setIsVideoOff(false);
+        console.log('📹 PARTICIPANT: Set video off state to false');
       }
     });
 
     // Other participants see host control updates
     MeetingSocket.on('participant-audio-controlled', (data) => {
       console.log('👥 Participant audio controlled by host:', data);
+      console.log('👥 Current participants before host audio control:', participants);
       
-      // Update participant state to show mute status
-      setParticipants(prev => 
-        prev.map(p => 
-          p.userId === data.userId 
-            ? { ...p, isMuted: data.isForceMuted, isHostMuted: data.isForceMuted }
-            : p
-        )
-      );
+      // Update participant state to show mute status (search by userId)
+      setParticipants(prev => {
+        const updated = prev.map(p => {
+          if (p.userId === data.userId) {
+            console.log(`👥 Found participant for host audio control:`, p);
+            console.log(`👥 Setting isMuted to:`, data.isForceMuted);
+            return { 
+              ...p, 
+              isMuted: data.isForceMuted, 
+              isHostMuted: data.isForceMuted,
+              // Clear host flag if unmuted
+              ...(data.isForceMuted ? {} : { isHostMuted: false })
+            };
+          }
+          return p;
+        });
+        console.log('👥 Updated participants list after host audio control:', updated);
+        return updated;
+      });
       console.log(`👥 Updated participant ${data.userId} mute state to:`, data.isForceMuted);
     });
 
@@ -366,11 +400,17 @@ const useMeetingRoomLogic = (meetingId, displayUser, user) => {
     MeetingSocket.on('participant-video-controlled', (data) => {
       console.log('👥 Participant video controlled by host:', data);
       
-      // Update participant state to show video status
+      // Update participant state to show video status (search by userId)
       setParticipants(prev => 
         prev.map(p => 
           p.userId === data.userId 
-            ? { ...p, isVideoOff: data.isVideoDisabled, isHostVideoDisabled: data.isVideoDisabled }
+            ? { 
+                ...p, 
+                isVideoOff: data.isVideoDisabled, 
+                isHostVideoDisabled: data.isVideoDisabled,
+                // Clear host flag if video enabled
+                ...(data.isVideoDisabled ? {} : { isHostVideoDisabled: false })
+              }
             : p
         )
       );
@@ -380,6 +420,73 @@ const useMeetingRoomLogic = (meetingId, displayUser, user) => {
     // Debug response handler
     MeetingSocket.on('test-host-control-response', (data) => {
       console.log('🔍 DEBUG RESPONSE: Backend host control state:', data);
+    });
+
+    // Generic event listener to catch all events for debugging
+    const originalOn = MeetingSocket.on;
+    MeetingSocket.on = function(event, handler) {
+      if (event.includes('host-control')) {
+        console.log(`🔍 REGISTERING LISTENER FOR: ${event}`);
+      }
+      return originalOn.call(this, event, (...args) => {
+        if (event.includes('host-control')) {
+          console.log(`🔍 RECEIVED EVENT: ${event}`, args);
+        }
+        return handler(...args);
+      });
+    };
+
+    // Listen for when other participants toggle their audio/video
+    MeetingSocket.on('participant-audio-toggled', (data) => {
+      console.log('👂 Participant audio toggled:', data);
+      console.log('👂 Looking for participant with socketId:', data.socketId);
+      console.log('👂 Current participants before update:', participants.map(p => ({ socketId: p.socketId, userId: p.userId, displayName: p.displayName })));
+      
+      // Update the participant's audio state in our list (search by socketId)
+      setParticipants(prev => {
+        const updated = prev.map(p => {
+          if (p.socketId === data.socketId) {
+            console.log(`👂 Found participant to update:`, p);
+            console.log(`👂 Setting isMuted to:`, data.isMuted);
+            return { 
+              ...p, 
+              isMuted: data.isMuted,
+              // If participant toggles themselves, clear host control flag
+              isHostMuted: false
+            };
+          }
+          return p;
+        });
+        console.log('👂 Updated participants list:', updated);
+        return updated;
+      });
+      console.log(`👂 Updated participant ${data.participantId} audio state to muted:`, data.isMuted);
+    });
+
+    MeetingSocket.on('participant-video-toggled', (data) => {
+      console.log('👁️ Participant video toggled:', data);
+      console.log('👁️ Looking for participant with socketId:', data.socketId);
+      console.log('👁️ Current participants before update:', participants.map(p => ({ socketId: p.socketId, userId: p.userId, displayName: p.displayName })));
+      
+      // Update the participant's video state in our list (search by socketId)
+      setParticipants(prev => {
+        const updated = prev.map(p => {
+          if (p.socketId === data.socketId) {
+            console.log(`👁️ Found participant to update:`, p);
+            console.log(`👁️ Setting isVideoOff to:`, data.isVideoOff);
+            return { 
+              ...p, 
+              isVideoOff: data.isVideoOff,
+              // If participant toggles themselves, clear host control flag
+              isHostVideoDisabled: false
+            };
+          }
+          return p;
+        });
+        console.log('👁️ Updated participants list:', updated);
+        return updated;
+      });
+      console.log(`👁️ Updated participant ${data.participantId} video state to off:`, data.isVideoOff);
     });
 
     console.log('✅ MeetingRoom: All socket listeners set up');
@@ -565,6 +672,24 @@ const useMeetingRoomLogic = (meetingId, displayUser, user) => {
         fromSocketId: MeetingSocket?.socket?.id,
         fromUserId: displayUser?.id
       });
+    };
+
+    // Add function to check current participants state
+    window.checkParticipants = () => {
+      console.log('=== CURRENT PARTICIPANTS STATE ===');
+      console.log('Participants array:', participants);
+      participants.forEach((p, index) => {
+        console.log(`Participant ${index}:`, {
+          socketId: p.socketId,
+          userId: p.userId,
+          displayName: p.displayName,
+          isMuted: p.isMuted,
+          isVideoOff: p.isVideoOff,
+          isHostMuted: p.isHostMuted,
+          isHostVideoDisabled: p.isHostVideoDisabled
+        });
+      });
+      console.log('================================');
     };
   };
 
