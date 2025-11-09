@@ -107,9 +107,7 @@ const meetingSocket = (io) => {
         });
 
         // Emit user-joined events for existing participants to the new user
-        console.log(`   📤 Emitting user-joined events to new user for existing participants:`, existingParticipants.length);
         existingParticipants.forEach(participant => {
-          console.log(`      👤 Emitting user-joined for:`, participant);
           socket.emit("user-joined", participant);
         });
 
@@ -119,11 +117,7 @@ const meetingSocket = (io) => {
           userId,
           displayName: displayName || `User ${userId.slice(-4)}`
         };
-        console.log(`   📢 Broadcasting user-joined to room ${roomId} for new user:`, newUserData);
-        console.log(`   👥 Broadcasting to sockets:`, otherUsers);
         socket.to(roomId).emit("user-joined", newUserData);
-
-        console.log(`👥 User ${userId} joined meeting ${meetingId} (room: ${roomId})`);
       } catch (error) {
         console.error('Error joining meeting:', error);
         socket.emit('meeting-error', { message: 'Failed to join meeting' });
@@ -382,7 +376,6 @@ const meetingSocket = (io) => {
         };
         
         // Broadcast to room (all participants)
-        console.log('🔊 Backend: Broadcasting participant-audio-toggled:', audioToggleData);
         meetingNamespace.to(roomId).emit("participant-audio-toggled", audioToggleData);
         
       } catch (error) {
@@ -392,7 +385,6 @@ const meetingSocket = (io) => {
 
     // Handle video toggle events
     socket.on("toggle-video", (data) => {
-      console.log('📹 Backend: Received toggle-video event:', data);
       try {
         const { meetingId, isVideoOff } = data;
         
@@ -412,7 +404,6 @@ const meetingSocket = (io) => {
         };
         
         // Broadcast to room (all participants) 
-        console.log('📹 Backend: Broadcasting participant-video-toggled:', videoToggleData);
         meetingNamespace.to(roomId).emit("participant-video-toggled", videoToggleData);
         
       } catch (error) {

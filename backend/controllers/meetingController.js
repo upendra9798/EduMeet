@@ -10,18 +10,11 @@ import { v4 as uuidv4 } from 'uuid';
  */
 export const createMeeting = async (req, res) => {
     try {
-        console.log('=== CREATE MEETING REQUEST ===');
-        console.log('Request headers:', req.headers);
-        console.log('Request body:', req.body);
-        console.log('Request origin:', req.get('Origin'));
-        
         // Extract meeting details from request body
         const { title, startTime, endTime, maxParticipants, roomType, meetingSettings } = req.body;
         
         // Get host ID from authenticated user or request body (fallback for testing)
         const hostId = req.user?.id || req.body.hostId;
-        
-        console.log('Creating meeting:', { title, hostId, body: req.body });
 
         // Generate unique meeting ID using UUID v4
         const meetingId = uuidv4();
@@ -51,7 +44,6 @@ export const createMeeting = async (req, res) => {
 
         // Save meeting to database
         const savedMeeting = await meeting.save();
-        console.log('Meeting saved successfully:', savedMeeting);
 
         // Return success response with meeting details
         const responseData = {
@@ -67,9 +59,6 @@ export const createMeeting = async (req, res) => {
                 meetingSettings: meeting.meetingSettings
             }
         };
-        
-        console.log('=== SENDING RESPONSE ===');
-        console.log('Response data:', responseData);
         
         // Set headers for mobile compatibility
         res.header('Access-Control-Allow-Origin', req.get('Origin') || '*');
@@ -104,12 +93,6 @@ export const createMeeting = async (req, res) => {
  */
 export const joinMeeting = async (req, res) => {
     try {
-        console.log('=== JOIN MEETING REQUEST ===');
-        console.log('Request headers:', req.headers);
-        console.log('Request params:', req.params);
-        console.log('Request body:', req.body);
-        console.log('Request origin:', req.get('Origin'));
-        
         // Extract meeting ID from URL parameters
         const { meetingId } = req.params;
         // Get user ID from authenticated user or request body (fallback for testing)
@@ -159,9 +142,6 @@ export const joinMeeting = async (req, res) => {
                 endTime: meeting.endTime
             }
         };
-        
-        console.log('=== JOIN MEETING SUCCESS ===');
-        console.log('Response data:', responseData);
         
         // Set headers for mobile compatibility
         res.header('Access-Control-Allow-Origin', req.get('Origin') || '*');

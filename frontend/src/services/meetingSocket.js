@@ -245,12 +245,10 @@ class MeetingSocket {
 
       // TEST EVENT HANDLERS: For debugging communication
       this.socket.on('participant-audio-toggled', (data) => {
-        console.log('🔊 Received participant-audio-toggled:', data);
         this.emit('participant-audio-toggled', data); // Forward to UI components
       });
 
       this.socket.on('participant-video-toggled', (data) => {
-        console.log('📹 Received participant-video-toggled:', data);
         this.emit('participant-video-toggled', data); // Forward to UI components
       });
 
@@ -461,12 +459,6 @@ class MeetingSocket {
       throw new Error('Not connected to meeting');
     }
     
-    console.log('🔊 MeetingSocket.toggleAudio called:', { 
-      isMuted, 
-      meetingId: this.meetingId, 
-      isConnected: this.isConnected 
-    });
-    
     this.socket.emit('toggle-audio', {
       meetingId: this.meetingId,
       isMuted
@@ -481,12 +473,6 @@ class MeetingSocket {
     if (!this.isConnected || !this.meetingId) {
       throw new Error('Not connected to meeting');
     }
-    
-    console.log('📹 MeetingSocket.toggleVideo called:', { 
-      isVideoOff, 
-      meetingId: this.meetingId, 
-      isConnected: this.isConnected 
-    });
     
     this.socket.emit('toggle-video', {
       meetingId: this.meetingId,

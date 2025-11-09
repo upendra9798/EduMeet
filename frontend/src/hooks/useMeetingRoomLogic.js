@@ -319,53 +319,28 @@ const useMeetingRoomLogic = (meetingId, displayUser, user) => {
 
     // Host action success feedback
     MeetingSocket.on('host-action-success', (data) => {
-      console.log('✅ Host action successful:', data);
-      
-      // Show success feedback to host
-      if (data.action === 'mute-participant') {
-        console.log(`✅ Successfully ${data.isForceMuted ? 'muted' : 'unmuted'} participant ${data.targetUserId}`);
-      } else if (data.action === 'disable-video') {
-        console.log(`✅ Successfully ${data.isVideoDisabled ? 'disabled' : 'enabled'} video for participant ${data.targetUserId}`);
-      }
+      // Host action completed successfully
     });
 
     // Participant receives host control commands
     MeetingSocket.on('host-control-audio', (data) => {
-      console.log('🔇 PARTICIPANT: Received host audio control command:', data);
-      console.log('🔇 PARTICIPANT: My user ID is:', displayUser.id);
-      console.log('🔇 PARTICIPANT: My socket ID is:', MeetingSocket?.socket?.id);
-      console.log('🔇 PARTICIPANT: Current audio state - muted:', isMuted);
-      
       if (data.isForceMuted) {
-        console.log('🔇 PARTICIPANT: Host is force-muting me');
         // Update the mute state directly
         setIsMuted(true);
-        console.log('🔇 PARTICIPANT: Set muted state to true');
       } else {
-        console.log('🔊 PARTICIPANT: Host is allowing me to unmute');
         // Update the mute state directly
         setIsMuted(false);
-        console.log('🔊 PARTICIPANT: Set muted state to false');
       }
     });
 
     // Participant receives host video control commands
     MeetingSocket.on('host-control-video', (data) => {
-      console.log('📹 PARTICIPANT: Received host video control command:', data);
-      console.log('📹 PARTICIPANT: My user ID is:', displayUser.id);
-      console.log('📹 PARTICIPANT: My socket ID is:', MeetingSocket?.socket?.id);
-      console.log('📹 PARTICIPANT: Current video state - off:', isVideoOff);
-      
       if (data.isVideoDisabled) {
-        console.log('📹 PARTICIPANT: Host is disabling my video');
         // Update the video state directly
         setIsVideoOff(true);
-        console.log('� PARTICIPANT: Set video off state to true');
       } else {
-        console.log('� PARTICIPANT: Host is allowing my video');
         // Update the video state directly
         setIsVideoOff(false);
-        console.log('📹 PARTICIPANT: Set video off state to false');
       }
     });
 
@@ -424,7 +399,6 @@ const useMeetingRoomLogic = (meetingId, displayUser, user) => {
       );
     });
 
-    console.log('✅ MeetingRoom: All socket listeners set up');
     setListenersSetup(true);
   };
 
@@ -440,7 +414,6 @@ const useMeetingRoomLogic = (meetingId, displayUser, user) => {
       });
       
       setLocalStream(stream);
-      console.log('Media stream obtained:', stream);
     } catch (error) {
       console.error('Failed to get media stream:', error);
       setMediaAccessFailed(true);
@@ -504,12 +477,10 @@ const useMeetingRoomLogic = (meetingId, displayUser, user) => {
 
   // Host control callback functions
   const handleHostControlVideo = (isDisabled) => {
-    console.log('🎯 Host controlled video - setting isVideoOff to:', isDisabled);
     setIsVideoOff(isDisabled);
   };
 
   const handleHostControlAudio = (isForceMuted) => {
-    console.log('🎯 Host controlled audio - setting isMuted to:', isForceMuted);
     setIsMuted(isForceMuted);
   };
 
