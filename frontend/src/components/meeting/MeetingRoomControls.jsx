@@ -24,7 +24,6 @@ const MeetingRoomControls = ({
   toggleMute,
   toggleVideo,
   requestMediaAccess,
-  testAudioToggle,
   handleLeaveMeeting,
   handleEndMeeting,
   
@@ -102,19 +101,6 @@ const MeetingRoomControls = ({
           </div>
         )}
 
-        {/* Test Button - Remove after testing */}
-        <div className="flex flex-col items-center">
-          <button
-            onClick={testAudioToggle}
-            className="p-2 rounded-lg bg-yellow-500 hover:bg-yellow-600 shadow-lg"
-          >
-            🧪
-          </button>
-          <span className="text-xs text-gray-300 mt-1 font-medium">
-            Test
-          </span>
-        </div>
-
         {/* Participants */}
         <div className="flex flex-col items-center">
           <button
@@ -182,19 +168,6 @@ const MeetingRoomControls = ({
             </span>
           </div>
         )}
-
-        {/* Debug Test Button */}
-        <div className="flex flex-col items-center ml-4 pl-4 border-l border-white/20">
-          <button
-            onClick={testAudioToggle}
-            className="px-3 py-2 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-500 hover:to-purple-600 rounded-lg text-white text-xs font-semibold shadow-lg shadow-purple-500/25 transition-all duration-200 transform hover:scale-105"
-          >
-            🧪 Test
-          </button>
-          <span className="text-xs text-gray-300 mt-1 font-medium">
-            Debug
-          </span>
-        </div>
 
         {/* Settings */}
         <div className="flex flex-col items-center ml-4 pl-4 border-l border-white/20">

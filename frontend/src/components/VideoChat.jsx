@@ -161,6 +161,7 @@ export default function VideoChat({ meetingId, userId, localStream, isMuted, isV
   const localVideoRef = useRef(null);
   const localStreamRef = useRef(null);
   const pcRef = useRef({}); // Each user gets its own RTCPeerConnection instance
+  const creatingPcRef = useRef({}); // track simultaneous pc creation per peer
 
 
 
@@ -269,10 +270,16 @@ export default function VideoChat({ meetingId, userId, localStream, isMuted, isV
         
         for (const participant of data.existingParticipants) {
           console.log('VideoChat: Processing existing participant:', participant);
+          console.log('VideoChat: Current remoteParticipants keys:', Object.keys(remoteParticipants));
           
-          // Initialize participant in state before creating peer connection
+          // Initialize participant in state before creating peer connection - with guard
           setRemoteParticipants(prev => {
-            console.log('VideoChat: Adding existing participant to state:', participant.socketId);
+            if (prev[participant.socketId]) {
+              console.log('VideoChat: Participant already exists in state:', participant.socketId);
+              console.log('VideoChat: Existing participants:', Object.keys(prev));
+              return prev;
+            }
+            console.log('VideoChat: Adding new existing participant to state:', participant.socketId);
             return {
               ...prev,
               [participant.socketId]: {
@@ -295,10 +302,17 @@ export default function VideoChat({ meetingId, userId, localStream, isMuted, isV
     // A new user joins
     MeetingSocket.on("user-joined", async (participant) => {
       console.log('VideoChat: New user joined event received:', participant);
+      console.log('VideoChat: Current remoteParticipants keys before adding:', Object.keys(remoteParticipants));
       
-      // Initialize participant in state before creating peer connection
+      // Initialize participant in state before creating peer connection - with guard
       setRemoteParticipants(prev => {
-        console.log('VideoChat: Adding new participant to state:', participant.socketId);
+        if (prev[participant.socketId]) {
+          console.log('VideoChat: Participant already exists in state:', participant.socketId);
+          console.log('VideoChat: Existing participants:', Object.keys(prev));
+          console.log('VideoChat: Duplicate participant detected - socketId:', participant.socketId);
+          return prev;
+        }
+        console.log('VideoChat: Adding new joined participant to state:', participant.socketId);
         return {
           ...prev,
           [participant.socketId]: {
@@ -395,25 +409,41 @@ export default function VideoChat({ meetingId, userId, localStream, isMuted, isV
     // When a participant toggles their audio
     MeetingSocket.on("participant-audio-toggled", (data) => {
       console.log('VideoChat: Participant audio toggled:', data);
-      setRemoteParticipants(prev => ({
-        ...prev,
-        [data.socketId]: {
-          ...prev[data.socketId],
-          isMuted: data.isMuted
+      console.log('VideoChat: Current participants before audio toggle:', Object.keys(remoteParticipants));
+      setRemoteParticipants(prev => {
+        if (!prev[data.socketId]) {
+          console.warn('VideoChat: Audio toggle for unknown participant:', data.socketId);
+          console.log('VideoChat: Known participants:', Object.keys(prev));
+          return prev;
         }
-      }));
+        return {
+          ...prev,
+          [data.socketId]: {
+            ...prev[data.socketId],
+            isMuted: data.isMuted
+          }
+        };
+      });
     });
 
     // When a participant toggles their video
     MeetingSocket.on("participant-video-toggled", (data) => {
       console.log('VideoChat: Participant video toggled:', data);
-      setRemoteParticipants(prev => ({
-        ...prev,
-        [data.socketId]: {
-          ...prev[data.socketId],
-          isVideoOff: data.isVideoOff
+      console.log('VideoChat: Current participants before video toggle:', Object.keys(remoteParticipants));
+      setRemoteParticipants(prev => {
+        if (!prev[data.socketId]) {
+          console.warn('VideoChat: Video toggle for unknown participant:', data.socketId);
+          console.log('VideoChat: Known participants:', Object.keys(prev));
+          return prev;
         }
-      }));
+        return {
+          ...prev,
+          [data.socketId]: {
+            ...prev[data.socketId],
+            isVideoOff: data.isVideoOff
+          }
+        };
+      });
     });
 
     // Handle host control audio command
@@ -545,6 +575,30 @@ export default function VideoChat({ meetingId, userId, localStream, isMuted, isV
   /** 🎛️ Create WebRTC Peer Connection */
   const createPeerConnection = async (id, isInitiator) => {
     try {
+      // If PC already exists, return it (avoid duplicate PC creation)
+      if (pcRef.current[id]) {
+        console.log('VideoChat: PeerConnection already exists for', id);
+        return pcRef.current[id];
+      }
+
+      // Prevent concurrent creation for same id
+      if (creatingPcRef.current[id]) {
+        console.log('VideoChat: PC creation in progress for', id, '- waiting for existing creation');
+        // wait until creation completes (simple poll)
+        await new Promise((resolve, reject) => {
+          const start = Date.now();
+          const check = () => {
+            if (pcRef.current[id]) return resolve(pcRef.current[id]);
+            if (Date.now() - start > 5000) return reject(new Error('Timeout waiting for PC creation'));
+            setTimeout(check, 50);
+          };
+          check();
+        });
+        return pcRef.current[id];
+      }
+
+      creatingPcRef.current[id] = true;
+
       console.log(`📹 VideoChat: Creating peer connection with ${id}`);
       console.log(`📹 VideoChat: - isInitiator: ${isInitiator}`);
       console.log(`📹 VideoChat: - hasLocalStream: ${!!localStreamRef.current}`);
@@ -606,37 +660,30 @@ export default function VideoChat({ meetingId, userId, localStream, isMuted, isV
         console.log('VideoChat: ICE gathering state:', pc.iceGatheringState, 'for peer:', id);
       };
 
-      // When remote stream arrives - this works regardless of local stream
+      // ontrack - make idempotent (only update if stream.id changed)
       pc.ontrack = (event) => {
         console.log('🎬 VideoChat: Received remote stream from:', id);
         const [remoteStream] = event.streams;
-        
-        // Log stream details
-        console.log('🎬 VideoChat: Remote stream details:', {
-          id: remoteStream.id,
-          active: remoteStream.active,
-          videoTracks: remoteStream.getVideoTracks().length,
-          audioTracks: remoteStream.getAudioTracks().length
-        });
-        
-        // Log video track details if any
-        const videoTracks = remoteStream.getVideoTracks();
-        if (videoTracks.length > 0) {
-          console.log('🎥 VideoChat: Video track settings:', videoTracks[0].getSettings());
-          console.log('🎥 VideoChat: Video track state:', videoTracks[0].readyState);
-        }
-        
-        // Update existing participant with stream, preserving display name
-        setRemoteParticipants(prev => ({
-          ...prev,
-          [id]: {
-            ...prev[id],
-            socketId: id,
-            stream: remoteStream,
-            displayName: prev[id]?.displayName || `Participant ${id.slice(-4)}`
+        if (!remoteStream) return;
+
+        setRemoteParticipants(prev => {
+          const existing = prev[id];
+          // If same stream already attached, do nothing
+          if (existing && existing.stream && existing.stream.id === remoteStream.id) {
+            console.log('� VideoChat: same remote stream already set for', id);
+            return prev;
           }
-        }));
-        
+          // Otherwise update participant entry (preserve existing displayName etc.)
+          return {
+            ...prev,
+            [id]: {
+              ...existing,
+              socketId: id,
+              stream: remoteStream,
+              displayName: (existing && existing.displayName) ? existing.displayName : `Participant ${id.slice(-4)}`
+            }
+          };
+        });
         console.log('✅ VideoChat: Updated participant with stream:', id);
       };
 
@@ -675,6 +722,8 @@ export default function VideoChat({ meetingId, userId, localStream, isMuted, isV
     } catch (error) {
       console.error('VideoChat: Error creating peer connection:', error);
       throw error;
+    } finally {
+      creatingPcRef.current[id] = false;
     }
   };
 
@@ -711,17 +760,24 @@ export default function VideoChat({ meetingId, userId, localStream, isMuted, isV
             />
             
             {/* Remote Participants */}
-            {Object.values(remoteParticipants).map(participant => (
-              <VideoTile
-                key={participant.socketId}
-                participant={participant}
-                isLocal={false}
-                onToggleVideo={() => {}}
-                onToggleMute={() => {}}
-                isMuted={participant.isMuted || false}
-                isVideoOff={participant.isVideoOff || false}
-              />
-            ))}
+            {Object.values(remoteParticipants).map((participant, index) => {
+              console.log(`VideoChat: Rendering participant ${index}:`, {
+                socketId: participant.socketId,
+                displayName: participant.displayName,
+                hasStream: !!participant.stream
+              });
+              return (
+                <VideoTile
+                  key={participant.socketId}
+                  participant={participant}
+                  isLocal={false}
+                  onToggleVideo={() => {}}
+                  onToggleMute={() => {}}
+                  isMuted={participant.isMuted || false}
+                  isVideoOff={participant.isVideoOff || false}
+                />
+              );
+            })}
             
 
 

@@ -70,7 +70,6 @@ const MeetingRoom = ({ user }) => {
     handleSkipCamera,
     toggleMute,
     toggleVideo,
-    testAudioToggle,
     sendMessage,
     handleKeyPress,
     hostMuteParticipant,
@@ -227,7 +226,6 @@ const MeetingRoom = ({ user }) => {
         toggleMute={toggleMute}
         toggleVideo={toggleVideo}
         requestMediaAccess={requestMediaAccess}
-        testAudioToggle={testAudioToggle}
         handleLeaveMeeting={handleLeaveMeeting}
         handleEndMeeting={handleEndMeeting}
         participants={participants}
