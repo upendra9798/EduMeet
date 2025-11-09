@@ -8,14 +8,7 @@ const VideoTile = ({ participant, isLocal = false, isVideoOff = false, isMuted =
   const [isAudioActive, setIsAudioActive] = useState(false);
   const [isVideoActive, setIsVideoActive] = useState(false);
   
-  // Debug logging for props
-  console.log(`VideoTile ${isLocal ? 'LOCAL' : 'REMOTE'} ${participant.displayName}:`, {
-    isMuted,
-    isVideoOff,
-    isAudioActive,
-    isVideoActive,
-    hasStream: !!participant.stream
-  });
+
   
   // Monitor audio/video track status
   useEffect(() => {
@@ -65,11 +58,6 @@ const VideoTile = ({ participant, isLocal = false, isVideoOff = false, isMuted =
 
   useEffect(() => {
     if (videoRef.current && participant.stream) {
-      console.log(`🎞️ VideoTile: Setting up video for ${participant.displayName} (local: ${isLocal})`);
-      console.log(`🎞️ VideoTile: Stream active: ${participant.stream.active}`);
-      console.log(`🎞️ VideoTile: Video tracks: ${participant.stream.getVideoTracks().length}`);
-      console.log(`🎞️ VideoTile: Audio tracks: ${participant.stream.getAudioTracks().length}`);
-      
       videoRef.current.srcObject = participant.stream;
       
       // For remote streams, ensure audio is enabled
@@ -77,26 +65,13 @@ const VideoTile = ({ participant, isLocal = false, isVideoOff = false, isMuted =
         const audioTracks = participant.stream.getAudioTracks();
         audioTracks.forEach(track => {
           track.enabled = true;
-          console.log('🎞️ VideoTile: Enabled audio track for', participant.displayName);
-        });
-        
-        // Log video track details for debugging
-        const videoTracks = participant.stream.getVideoTracks();
-        videoTracks.forEach((track, index) => {
-          console.log(`🎞️ VideoTile: Video track ${index} state:`, track.readyState);
-          console.log(`🎞️ VideoTile: Video track ${index} enabled:`, track.enabled);
-          console.log(`🎞️ VideoTile: Video track ${index} settings:`, track.getSettings());
         });
       }
       
       // Auto-play the video (this is required for both video and audio)
-      videoRef.current.play()
-        .then(() => {
-          console.log(`✅ VideoTile: Video playing for ${participant.displayName}`);
-        })
-        .catch(err => {
-          console.log(`⚠️ VideoTile: Auto-play prevented for ${participant.displayName}:`, err.message);
-        });
+      videoRef.current.play().catch(() => {
+        // Auto-play may be prevented, this is normal
+      });
     }
   }, [participant.stream, isLocal, participant.displayName]);
 
@@ -187,57 +162,7 @@ export default function VideoChat({ meetingId, userId, localStream, isMuted, isV
   const localStreamRef = useRef(null);
   const pcRef = useRef({}); // Each user gets its own RTCPeerConnection instance
 
-  // Debug logging
-  useEffect(() => {
-    console.log('VideoChat: Component state updated:', {
-      joined,
-      remoteParticipantsCount: Object.keys(remoteParticipants).length,
-      remoteParticipants: Object.keys(remoteParticipants),
-      hasLocalStream: !!localStream,
-      meetingId,
-      userId
-    });
 
-    // Add global test functions
-    window.testForceVideoOff = () => {
-      console.log('🧪 Testing force video off...');
-      if (localStream) {
-        localStream.getVideoTracks().forEach(track => {
-          track.enabled = false;
-        });
-        console.log('🧪 Video tracks disabled manually');
-      }
-    };
-
-    window.testForceAudioOff = () => {
-      console.log('🧪 Testing force audio off...');
-      if (localStream) {
-        localStream.getAudioTracks().forEach(track => {
-          track.enabled = false;
-        });
-        console.log('🧪 Audio tracks disabled manually');
-      }
-    };
-
-    window.testSocketEventReceiving = () => {
-      console.log('🧪 Testing if socket can receive events...');
-      console.log('🧪 Socket ID:', MeetingSocket?.socket?.id);
-      console.log('🧪 Socket connected:', MeetingSocket?.isConnected);
-      
-      // Add a temporary test listener
-      MeetingSocket.on('test-event', (data) => {
-        console.log('🧪 RECEIVED TEST EVENT:', data);
-      });
-      
-      // Emit a test event to ourselves (echo test)
-      MeetingSocket.emit('test-frontend-event', { 
-        message: 'Test from VideoChat',
-        userId: userId,
-        socketId: MeetingSocket?.socket?.id
-      });
-    };
-
-  }, [joined, remoteParticipants, localStream, meetingId, userId]);
 
   // Notify parent when remote participants change
   useEffect(() => {
@@ -255,25 +180,20 @@ export default function VideoChat({ meetingId, userId, localStream, isMuted, isV
 
   /** 🚪 Auto-join the meeting room */
   useEffect(() => {
-    if (meetingId && userId) {
-      console.log('VideoChat: Auto-joining meeting room - meetingId:', meetingId, 'userId:', userId, 'joined:', joined);
-      if (!joined) {
-        joinMeetingRoom();
-      }
+    if (meetingId && userId && !joined) {
+      joinMeetingRoom();
     }
   }, [meetingId, userId]);
 
   /** 🎥 Set up local video stream */
   useEffect(() => {
-    console.log('VideoChat: Stream effect triggered', { localStream: !!localStream, videoRef: !!localVideoRef.current });
     if (localStream && localVideoRef.current) {
       localVideoRef.current.srcObject = localStream;
       localStreamRef.current = localStream;
-      console.log('VideoChat: Local stream assigned to video element');
       
       // Ensure video plays
-      localVideoRef.current.play().catch(err => {
-        console.log('VideoChat: Video play failed (this is normal):', err);
+      localVideoRef.current.play().catch(() => {
+        // Auto-play may be prevented
       });
     }
   }, [localStream]);
@@ -282,10 +202,9 @@ export default function VideoChat({ meetingId, userId, localStream, isMuted, isV
   useEffect(() => {
     if (localVideoRef.current && localStreamRef.current) {
       localVideoRef.current.srcObject = localStreamRef.current;
-      console.log('VideoChat: Re-assigned stream to new video ref');
       
-      localVideoRef.current.play().catch(err => {
-        console.log('VideoChat: Video play failed on ref change:', err);
+      localVideoRef.current.play().catch(() => {
+        // Auto-play may be prevented
       });
     }
   }, [localVideoRef.current]);
@@ -298,19 +217,11 @@ export default function VideoChat({ meetingId, userId, localStream, isMuted, isV
 
       // Use the passed localStream instead of creating a new one
       if (localStream) {
-        console.log('VideoChat: Using provided local stream');
         if (localVideoRef.current) {
           localVideoRef.current.srcObject = localStream;
-          console.log('VideoChat: Stream assigned to video element');
         }
         localStreamRef.current = localStream;
-      } else {
-        console.warn('VideoChat: No local stream provided');
       }
-
-      // VideoChat doesn't need to join again - the meeting is already joined via MeetingSocket
-      // We just set up WebRTC peer connections based on existing participants
-      console.log('VideoChat: Ready for WebRTC connections in meeting', meetingId);
     } catch (error) {
       console.error('Error setting up video chat:', error);
       setJoined(false);
@@ -321,7 +232,6 @@ export default function VideoChat({ meetingId, userId, localStream, isMuted, isV
   useEffect(() => {
     if (localStream) {
       localStreamRef.current = localStream;
-      console.log('VideoChat: Local stream updated in ref');
     }
   }, [localStream]);
 
@@ -334,11 +244,10 @@ export default function VideoChat({ meetingId, userId, localStream, isMuted, isV
         const audioContext = new (window.AudioContext || window.webkitAudioContext)();
         if (audioContext.state === 'suspended') {
           await audioContext.resume();
-          console.log('VideoChat: Audio context resumed for remote audio');
         }
         audioContext.close();
       } catch (error) {
-        console.log('VideoChat: Audio context handling not needed/supported:', error.message);
+        // Audio context handling not needed/supported
       }
     };
 
@@ -349,12 +258,6 @@ export default function VideoChat({ meetingId, userId, localStream, isMuted, isV
 
   /** 🔗 WebRTC signaling logic via MeetingSocket */
   useEffect(() => {
-    console.log('📡 VideoChat: Setting up MeetingSocket event listeners...');
-    console.log('📡 VideoChat: MeetingSocket available:', !!MeetingSocket);
-    console.log('📡 VideoChat: Socket ID:', MeetingSocket?.socket?.id);
-    console.log('📡 VideoChat: Socket connected:', MeetingSocket?.isConnected);
-    console.log('📡 VideoChat: My userId:', userId);
-    
     // Listen for existing participants when we join
     MeetingSocket.on("meeting-joined", async (data) => {
       console.log('VideoChat: Meeting joined event received:', data);
@@ -820,31 +723,7 @@ export default function VideoChat({ meetingId, userId, localStream, isMuted, isV
               />
             ))}
             
-            {/* Debug Info */}
-            <div className="col-span-full">
-              <div className="bg-blue-900/50 text-blue-100 p-3 rounded-lg text-sm">
-                <p><strong>Debug Info:</strong></p>
-                <p>Joined: {joined ? 'Yes' : 'No'}</p>
-                <p>Remote Participants: {Object.keys(remoteParticipants).length}</p>
-                <p>Participants: {Object.keys(remoteParticipants).join(', ') || 'None'}</p>
-                <p>Local Stream: {localStream ? 'Available' : 'Not available'}</p>
-                <p>Meeting ID: {meetingId}</p>
-                <p>User ID: {userId}</p>
-                <button 
-                  onClick={() => {
-                    console.log('Manual debug - Current state:', {
-                      joined,
-                      remoteParticipants,
-                      localStream: !!localStream,
-                      peerConnections: Object.keys(pcRef.current)
-                    });
-                  }}
-                  className="mt-2 px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-white text-sm"
-                >
-                  Log Debug Info
-                </button>
-              </div>
-            </div>
+
 
             {/* Empty State when no participants */}
             {Object.keys(remoteParticipants).length === 0 && (

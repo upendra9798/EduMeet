@@ -81,13 +81,12 @@ class MeetingSocket {
    * @returns {Promise} Promise that resolves when connected, rejects on error
    */
   connect(userId) {
-    console.log('MeetingSocket.connect called with userId:', userId);
-    console.log('Current connection state - isConnected:', this.isConnected, 'socket:', !!this.socket);
+
     
     // OPTIMIZATION: Avoid reconnecting if already connected with same user
     // This prevents unnecessary disconnection/reconnection cycles
     if (this.isConnected && this.userId === userId && this.socket) {
-      console.log('Already connected with same userId, skipping reconnect');
+
       return Promise.resolve(); // Return resolved Promise immediately
     }
     
@@ -97,15 +96,13 @@ class MeetingSocket {
       
       // CLEANUP: Disconnect any existing socket to avoid conflicts
       if (this.socket) {
-        console.log('Disconnecting existing socket connection');
+
         this.socket.disconnect();
       }
       
       // SETUP: Store user ID and prepare connection details
       this.userId = userId;
-      console.log('Creating new socket connection to:', `${SOCKET_URL}/meeting`);
-      console.log('User Agent:', navigator.userAgent);
-      console.log('Is Mobile:', /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
+
       
       // SOCKET CREATION: Create new socket.io connection with configuration
       this.socket = io(`${SOCKET_URL}/meeting`, {
@@ -118,8 +115,7 @@ class MeetingSocket {
 
       // SUCCESS HANDLER: Called when socket successfully connects
       this.socket.on('connect', () => {
-        console.log('✅ MeetingSocket: Connected to meeting socket:', this.socket.id);
-        console.log('✅ MeetingSocket: Connection URL was:', `${SOCKET_URL}/meeting`);
+
         this.isConnected = true;
         this.emit('connected', { socketId: this.socket.id });
         

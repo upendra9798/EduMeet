@@ -25,35 +25,7 @@ const meetingSocket = (io) => {
       console.log("🧪 test-backend-response sent");
     });
 
-    // Debug host control - show backend state
-    socket.on("test-host-control", (data) => {
-      console.log("🔍 DEBUG: Backend received test-host-control:", data);
-      console.log("🔍 DEBUG: Current userMeetings state:");
-      
-      for (const [socketId, session] of Object.entries(userMeetings)) {
-        console.log(`   📍 Socket ${socketId}:`, {
-          userId: session.userId,
-          meetingId: session.meetingId,
-          displayName: session.displayName
-        });
-      }
-      
-      // Try to find the target user
-      const targetSocketId = Object.entries(userMeetings).find(([sid, session]) => 
-        session.userId === data.targetUserId && session.meetingId === data.meetingId
-      )?.[0];
-      
-      console.log(`🔍 DEBUG: Looking for user ${data.targetUserId} in meeting ${data.meetingId}`);
-      console.log(`🔍 DEBUG: Found target socket:`, targetSocketId);
-      
-      socket.emit("test-host-control-response", {
-        foundTarget: !!targetSocketId,
-        targetSocketId,
-        totalSessions: Object.keys(userMeetings).length,
-        searchedUserId: data.targetUserId,
-        searchedMeetingId: data.meetingId
-      });
-    });
+
 
     //🏠 4️⃣ Joining a Meeting Room
     socket.on("join-meeting", async (data) => {

@@ -66,46 +66,7 @@ const MeetingRoomSidebars = ({
                 </span>
               </div>
               
-              {/* Debug Info */}
-              <div className="text-xs text-gray-400 mb-2 p-2 bg-gray-800 rounded">
-                <div>📊 Debug Info:</div>
-                <div>Participants in state: {participants.length}</div>
-                <div>Participants data: {JSON.stringify(participants.map(p => ({ userId: p.userId, socketId: p.socketId?.slice(-4), displayName: p.displayName })))}</div>
-                <div>Current user ID: {displayUser.id}</div>
-                <div>Is Host: {isHost ? 'Yes' : 'No'}</div>
-                <div>Socket connected: {MeetingSocket.isConnected ? 'Yes' : 'No'}</div>
-                <button 
-                  onClick={() => console.log('Current participants:', participants)}
-                  className="bg-blue-500 text-white px-2 py-1 rounded text-xs mt-1 mr-1"
-                >
-                  Log Participants
-                </button>
-                <button 
-                  onClick={() => {
-                    console.log('Manual sync attempt...');
-                    // Manually emit a request for current participants
-                    MeetingSocket.emit('get-participants', { meetingId });
-                    
-                    // Also try to get from VideoChat component data
-                    console.log('Checking VideoChat remote participants...');
-                    
-                    // Add a fake participant to test if UI updates
-                    const fakeParticipant = {
-                      socketId: 'manual-sync-' + Date.now(),
-                      userId: 'manual-user-' + Date.now(),
-                      displayName: 'Manual Sync Test',
-                      isMuted: false,
-                      isVideoOff: false
-                    };
-                    
-                    setParticipants(prev => [...prev, fakeParticipant]);
-                    console.log('Added fake participant for testing:', fakeParticipant);
-                  }}
-                  className="bg-orange-500 text-white px-2 py-1 rounded text-xs mt-1"
-                >
-                  Manual Sync
-                </button>
-              </div>
+
 
               <div className="space-y-3 max-h-40 overflow-y-auto">
                 {/* Current User */}

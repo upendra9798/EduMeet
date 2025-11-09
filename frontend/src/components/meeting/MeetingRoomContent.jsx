@@ -1,7 +1,7 @@
-import React from 'react';
-import { Video } from 'lucide-react';
-import VideoChat from '../VideoChat';
-import Whiteboard from '../Whiteboard';
+import React from "react";
+import { Video } from "lucide-react";
+import VideoChat from "../VideoChat";
+import Whiteboard from "../Whiteboard";
 
 /**
  * MeetingRoomContent Component
@@ -10,24 +10,23 @@ import Whiteboard from '../Whiteboard';
 const MeetingRoomContent = ({
   // View state
   activeView,
-  
+
   // Meeting data
   meetingId,
   displayUser,
   user,
   participants,
-  
+
   // Media state
   localStream,
   isMuted,
   isVideoOff,
-  
+
   // Callbacks
   onParticipantsChange,
   handleHostControlVideo,
-  handleHostControlAudio
+  handleHostControlAudio,
 }) => {
-  
   return (
     <main className="flex-1 relative">
       {activeView === "video" && (
