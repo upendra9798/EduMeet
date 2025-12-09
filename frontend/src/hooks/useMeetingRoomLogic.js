@@ -594,13 +594,34 @@ const useMeetingRoomLogic = (meetingId, displayUser, user) => {
     
     if (videoParticipants && videoParticipants.length > 0) {
       setParticipants(prev => {
-        // Merge existing participants with video participants
-        // Remove duplicates and prefer video participant data
+        // Create a map of video participants for quick lookup
+        const videoParticipantsMap = new Map(
+          videoParticipants.map(vp => [vp.socketId, vp])
+        );
+        
+        // Update existing participants with video data, add new ones
+        const updated = prev.map(existingP => {
+          const videoP = videoParticipantsMap.get(existingP.socketId);
+          if (videoP) {
+            // Update existing participant with video chat data while preserving other properties
+            return {
+              ...existingP,
+              isMuted: videoP.isMuted,
+              isVideoOff: videoP.isVideoOff,
+              isHostMuted: videoP.isHostMuted || existingP.isHostMuted || false,
+              isHostVideoDisabled: videoP.isHostVideoDisabled || existingP.isHostVideoDisabled || false,
+              displayName: videoP.displayName || existingP.displayName
+            };
+          }
+          return existingP;
+        });
+        
+        // Add new participants that don't exist yet
         const existingIds = new Set(prev.map(p => p.socketId));
         const newParticipants = videoParticipants.filter(vp => !existingIds.has(vp.socketId));
         
-        const merged = [...prev, ...newParticipants];
-        console.log('📹 Merged participants:', merged);
+        const merged = [...updated, ...newParticipants];
+        console.log('📹 Updated participants with video data:', merged);
         return merged;
       });
     }

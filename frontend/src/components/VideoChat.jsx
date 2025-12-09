@@ -173,9 +173,13 @@ export default function VideoChat({ meetingId, userId, localStream, isMuted, isV
         userId: p.userId || 'unknown',
         displayName: p.displayName || 'Remote User',
         isMuted: p.isMuted || false,
-        isVideoOff: p.isVideoOff || false
+        isVideoOff: p.isVideoOff || false,
+        // Include host control status for sidebar display
+        isHostMuted: p.isHostMuted || false,
+        isHostVideoDisabled: p.isHostVideoDisabled || false
       }));
       onParticipantsChange(participantsArray);
+      console.log('VideoChat: Sending participants to parent:', participantsArray);
     }
   }, [remoteParticipants, onParticipantsChange]);
 
@@ -420,7 +424,9 @@ export default function VideoChat({ meetingId, userId, localStream, isMuted, isV
           ...prev,
           [data.socketId]: {
             ...prev[data.socketId],
-            isMuted: data.isMuted
+            isMuted: data.isMuted,
+            // Clear host control status when participant toggles manually
+            isHostMuted: false
           }
         };
       });
@@ -440,7 +446,9 @@ export default function VideoChat({ meetingId, userId, localStream, isMuted, isV
           ...prev,
           [data.socketId]: {
             ...prev[data.socketId],
-            isVideoOff: data.isVideoOff
+            isVideoOff: data.isVideoOff,
+            // Clear host control status when participant toggles manually  
+            isHostVideoDisabled: false
           }
         };
       });
@@ -453,6 +461,18 @@ export default function VideoChat({ meetingId, userId, localStream, isMuted, isV
       console.log('🔇 VideoChat: My userId is:', userId);
       console.log('🔇 VideoChat: Local stream available:', !!localStream);
       console.log('🔇 VideoChat: Current mute state:', isMuted);
+      
+      // Update remote participants state for anyone affected by host control
+      if (data.targetUserId && data.targetSocketId) {
+        setRemoteParticipants(prev => ({
+          ...prev,
+          [data.targetSocketId]: {
+            ...prev[data.targetSocketId],
+            isMuted: data.isForceMuted,
+            isHostMuted: data.isForceMuted
+          }
+        }));
+      }
       
       if (data.isForceMuted) {
         console.log('🔇 VideoChat: FORCE MUTING AUDIO');
@@ -495,6 +515,18 @@ export default function VideoChat({ meetingId, userId, localStream, isMuted, isV
       console.log('📹 VideoChat: My userId is:', userId);
       console.log('📹 VideoChat: Local stream available:', !!localStream);
       console.log('📹 VideoChat: Current video state - off:', isVideoOff);
+      
+      // Update remote participants state for anyone affected by host control
+      if (data.targetUserId && data.targetSocketId) {
+        setRemoteParticipants(prev => ({
+          ...prev,
+          [data.targetSocketId]: {
+            ...prev[data.targetSocketId],
+            isVideoOff: data.isVideoDisabled,
+            isHostVideoDisabled: data.isVideoDisabled
+          }
+        }));
+      }
       
       if (data.isVideoDisabled) {
         console.log('📹 VideoChat: FORCE DISABLING VIDEO');
