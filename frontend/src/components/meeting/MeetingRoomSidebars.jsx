@@ -42,10 +42,10 @@ const MeetingRoomSidebars = ({
     <>
       {/* Participants Sidebar */}
       {participantsSidebarOpen && (
-        <aside className="w-96 bg-black/40 backdrop-blur-lg text-white border-l border-white/10">
-          <div className="p-6">
-            {/* Sidebar Header */}
-            <div className="flex items-center justify-between mb-6">
+        <aside className="w-96 bg-black/40 backdrop-blur-lg text-white border-l border-white/10 h-full flex flex-col">
+          {/* Fixed Header */}
+          <div className="p-6 border-b border-white/10 flex-shrink-0">
+            <div className="flex items-center justify-between">
               <h3 className="text-xl font-bold">Participants</h3>
               <button
                 onClick={() => setParticipantsSidebarOpen(false)}
@@ -54,6 +54,11 @@ const MeetingRoomSidebars = ({
                 ✕
               </button>
             </div>
+          </div>
+          
+          {/* Scrollable Content */}
+          <div className="flex-1 overflow-y-auto custom-scrollbar">
+            <div className="p-6">
 
             {/* Participants Section */}
             <div className="mb-8">
@@ -68,7 +73,7 @@ const MeetingRoomSidebars = ({
               
 
 
-              <div className="space-y-3 max-h-40 overflow-y-auto">
+              <div className="space-y-3 max-h-80 overflow-y-auto custom-scrollbar">
                 {/* Current User */}
                 <div className="flex items-center space-x-3 p-3 bg-gradient-to-r from-blue-500/20 to-purple-500/20 rounded-xl border border-blue-500/30">
                   <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center font-bold">
@@ -261,6 +266,7 @@ const MeetingRoomSidebars = ({
                 />
               </div>
             )}
+            </div>
           </div>
         </aside>
       )}

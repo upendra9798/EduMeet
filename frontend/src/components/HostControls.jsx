@@ -104,7 +104,7 @@ const HostControls = ({ participants, currentUser, isHost, meetingId }) => {
           {/* All Participants List */}
           <div className="p-4">
             <h4 className="text-sm font-medium text-white mb-3">All Participants</h4>
-            <div className="space-y-2 max-h-80 overflow-y-auto">
+            <div className="space-y-2 max-h-80 overflow-y-auto custom-scrollbar">
               {allParticipants.map((participant, index) => (
                 <div 
                   key={`host-control-${participant.socketId}-${index}`} 
