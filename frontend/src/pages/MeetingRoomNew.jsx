@@ -184,6 +184,7 @@ const MeetingRoom = ({ user }) => {
           displayUser={displayUser}
           user={user}
           participants={participants}
+          hostId={meeting?.host}
           localStream={localStream}
           isMuted={isMuted}
           isVideoOff={isVideoOff}

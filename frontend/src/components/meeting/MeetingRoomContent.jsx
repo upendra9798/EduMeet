@@ -16,6 +16,7 @@ const MeetingRoomContent = ({
   displayUser,
   user,
   participants,
+  hostId,
 
   // Media state
   localStream,
@@ -40,6 +41,8 @@ const MeetingRoomContent = ({
             onParticipantsChange={onParticipantsChange}
             onHostControlVideo={handleHostControlVideo}
             onHostControlAudio={handleHostControlAudio}
+            hostId={hostId}
+            displayName={displayUser.username}
           />
         </div>
       )}
@@ -68,6 +71,8 @@ const MeetingRoomContent = ({
               onParticipantsChange={onParticipantsChange}
               onHostControlVideo={handleHostControlVideo}
               onHostControlAudio={handleHostControlAudio}
+              hostId={hostId}
+              displayName={displayUser.username}
             />
           </div>
           <div className="bg-white rounded-lg overflow-hidden">

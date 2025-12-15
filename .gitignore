@@ -62,3 +62,6 @@ Thumbs.db
 
 # Ignore backend README file
 backend/Readme.md
+
+# Ignore WebRTC documentation
+WEBRTC_DOCUMENTATION.md

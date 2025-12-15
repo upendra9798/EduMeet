@@ -3,7 +3,7 @@ import MeetingSocket from "../services/meetingSocket";
 import { v4 as uuidv4 } from "uuid";
 
 // Video Tile Component for individual participants
-const VideoTile = ({ participant, isLocal = false, isVideoOff = false, isMuted = false }) => {
+const VideoTile = ({ participant, isLocal = false, isVideoOff = false, isMuted = false, isHost = false }) => {
   const videoRef = useRef(null);
   const [isAudioActive, setIsAudioActive] = useState(false);
   const [isVideoActive, setIsVideoActive] = useState(false);
@@ -90,9 +90,17 @@ const VideoTile = ({ participant, isLocal = false, isVideoOff = false, isMuted =
       
       {/* Participant Name - Top Left */}
       <div className="absolute top-3 left-3 bg-black/80 text-white px-3 py-2 rounded-lg text-sm font-semibold shadow-lg border border-gray-600/50 backdrop-blur-sm">
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center gap-2">
           <div className="w-2 h-2 rounded-full bg-green-400"></div>
-          <span>{participant.displayName || 'Participant'} {isLocal && "(You)"}</span>
+          <div className="flex items-center gap-1.5">
+            <span>{participant.displayName || 'Participant'}</span>
+            {isHost && (
+              <span className="px-2 py-0.5 bg-gradient-to-r from-purple-600 to-purple-500 text-white text-xs font-bold rounded-full shadow-md">
+                Host
+              </span>
+            )}
+            {isLocal && <span className="text-gray-300 font-normal">(You)</span>}
+          </div>
         </div>
       </div>
       
@@ -105,10 +113,17 @@ const VideoTile = ({ participant, isLocal = false, isVideoOff = false, isMuted =
                 <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-6-3a2 2 0 11-4 0 2 2 0 014 0zm-2 4a5 5 0 00-4.546 2.916A5.986 5.986 0 0010 16a5.986 5.986 0 004.546-2.084A5 5 0 0010 11z" clipRule="evenodd" />
               </svg>
             </div>
-            <h3 className="text-lg font-semibold mb-1">
-              {participant.displayName || 'Participant'}
-              {isLocal && " (You)"}
-            </h3>
+            <div className="flex items-center justify-center gap-2 mb-1">
+              <h3 className="text-lg font-semibold">
+                {participant.displayName || 'Participant'}
+              </h3>
+              {isHost && (
+                <span className="px-2.5 py-1 bg-gradient-to-r from-purple-600 to-purple-500 text-white text-xs font-bold rounded-full shadow-lg">
+                  Host
+                </span>
+              )}
+              {isLocal && <span className="text-gray-400 text-base font-normal">(You)</span>}
+            </div>
             <p className="text-sm text-gray-300">Camera is off</p>
           </div>
         </div>
@@ -155,7 +170,7 @@ const VideoTile = ({ participant, isLocal = false, isVideoOff = false, isMuted =
  * Handles video streaming for existing meeting rooms.
  * Uses Socket.IO for signaling (offer/answer/ICE exchange).
  */
-export default function VideoChat({ meetingId, userId, localStream, isMuted, isVideoOff, onParticipantsChange, onHostControlVideo, onHostControlAudio }) {
+export default function VideoChat({ meetingId, userId, localStream, isMuted, isVideoOff, onParticipantsChange, onHostControlVideo, onHostControlAudio, hostId, displayName }) {
   const [joined, setJoined] = useState(false);
   const [remoteParticipants, setRemoteParticipants] = useState({}); // Track remote participants and their streams
   const localVideoRef = useRef(null);
@@ -783,12 +798,13 @@ export default function VideoChat({ meetingId, userId, localStream, isMuted, isV
             {/* Local Video - Always show, even without stream */}
             <VideoTile
               participant={{
-                displayName: "You",
+                displayName: displayName || "You",
                 stream: localStream
               }}
               isLocal={true}
               isMuted={isMuted}
               isVideoOff={isVideoOff}
+              isHost={hostId && userId && hostId.toString() === userId.toString()}
             />
             
             {/* Remote Participants */}
@@ -807,6 +823,7 @@ export default function VideoChat({ meetingId, userId, localStream, isMuted, isV
                   onToggleMute={() => {}}
                   isMuted={participant.isMuted || false}
                   isVideoOff={participant.isVideoOff || false}
+                  isHost={hostId && participant.userId && hostId.toString() === participant.userId.toString()}
                 />
               );
             })}
