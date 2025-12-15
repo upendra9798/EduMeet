@@ -281,6 +281,41 @@ const useMeetingRoomLogic = (meetingId, displayUser, user) => {
       }
     });
 
+    // Handle when this user is removed from meeting by host
+    MeetingSocket.on('removed-from-meeting', (data) => {
+      console.log('🚨 You have been removed from the meeting:', data);
+      
+      // Show alert to user
+      alert(data.message || 'You have been removed from the meeting by the host');
+      
+      // Clean up local stream
+      if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+        setLocalStream(null);
+      }
+      
+      // Disconnect from meeting
+      MeetingSocket.disconnect();
+      
+      // Redirect to home page
+      setTimeout(() => {
+        navigate('/');
+      }, 1000);
+    });
+
+    // Handle when another participant is removed (update participant list)
+    MeetingSocket.on('participant-removed', (data) => {
+      console.log('🚨 Participant removed from meeting:', data);
+      
+      if (data && data.userId) {
+        setParticipants(prev => {
+          const updated = prev.filter(p => p.userId !== data.userId);
+          console.log('➖ Removed participant from list:', data.userId);
+          return updated;
+        });
+      }
+    });
+
     // Handle meeting errors
     MeetingSocket.on('meeting-error', (error) => {
       console.error('❌ Meeting error:', error);
